@@ -12,7 +12,10 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('registres', '0004_action_historique_immat'),
+        ('registres',   '0004_action_historique_immat'),
+        # sequences_numerotation est une table SQL pure (hors modèle Django).
+        # En Railway (sans Docker/schema.sql), elle doit être créée par migration.
+        ('parametrage', '0003_sequences_numerotation'),
     ]
 
     operations = [
