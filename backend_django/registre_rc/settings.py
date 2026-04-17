@@ -54,11 +54,14 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # ── CORS en tête : doit précéder TOUT middleware qui génère des réponses
+    # (WhiteNoise, MigrationGuard…) pour que même les 503/404 aient le header
+    # Access-Control-Allow-Origin et que le navigateur ne masque pas le vrai erreur.
+    'corsheaders.middleware.CorsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     # ── Garde schéma RCCM : bloque /api/* avec HTTP 503 si migrations en attente
     'apps.core.middleware.MigrationGuardMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
