@@ -172,10 +172,10 @@ SIMPLE_JWT = {
 }
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# CORS_ALLOW_ALL_ORIGINS=True : autorise toutes les origines (pratique pour tests
-# Railway où l'URL du frontend change à chaque projet).
-# En production réelle, mettre False et renseigner CORS_ALLOWED_ORIGINS.
-CORS_ALLOW_ALL_ORIGINS  = config('CORS_ALLOW_ALL_ORIGINS',  default=False, cast=bool)
+# Pour les déploiements Railway de test, CORS_ALLOW_ALL_ORIGINS est activé par
+# défaut (True) car l'URL du frontend est générée automatiquement par Railway.
+# En production réelle : CORS_ALLOW_ALL_ORIGINS=False + CORS_ALLOWED_ORIGINS=<url>
+CORS_ALLOW_ALL_ORIGINS  = config('CORS_ALLOW_ALL_ORIGINS',  default=True, cast=bool)
 CORS_ALLOWED_ORIGINS    = config('CORS_ALLOWED_ORIGINS',    default='http://localhost:3000').split(',')
 CORS_ALLOW_CREDENTIALS  = True
 
