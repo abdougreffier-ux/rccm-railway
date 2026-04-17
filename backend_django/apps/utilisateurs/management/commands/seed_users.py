@@ -225,9 +225,24 @@ class Command(BaseCommand):
                     ))
                 else:
                     existing_count += 1
-                    self.stdout.write(self.style.WARNING(
-                        f'  ⏭  Existe : {login} (non modifié)'
-                    ))
+                    # Assigner rôle/poste si manquants (utilisateurs créés avant le seed des rôles)
+                    update_fields = []
+                    if role_code and user.role is None:
+                        user.role = roles_map.get(role_code)
+                        update_fields.append('role')
+                    if poste_code and user.poste is None:
+                        user.poste = postes_map.get(poste_code)
+                        update_fields.append('poste')
+                    if update_fields:
+                        user.save(update_fields=update_fields)
+                        role_label = roles_map[role_code].libelle if role_code else '—'
+                        self.stdout.write(self.style.SUCCESS(
+                            f'  🔄 Mis à jour : {login} → rôle assigné [{role_label}]'
+                        ))
+                    else:
+                        self.stdout.write(self.style.WARNING(
+                            f'  ⏭  Existe : {login} (non modifié)'
+                        ))
 
                 # Remettre les valeurs extraites pour ne pas altérer la liste
                 user_data['password'] = password
