@@ -2,6 +2,7 @@
 Django Settings - Registre du Commerce - Mauritanie
 """
 import os
+import dj_database_url
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
@@ -85,18 +86,29 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'registre_rc.wsgi.application'
 
-# Base de données PostgreSQL
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME':     config('DB_NAME',     default='registre_commerce'),
-        'USER':     config('DB_USER',     default='rc_user'),
-        'PASSWORD': config('DB_PASSWORD', default='rc_password_secret'),
-        'HOST':     config('DB_HOST',     default='localhost'),
-        'PORT':     config('DB_PORT',     default='5432'),
-        'OPTIONS':  {'options': '-c search_path=public'},
+# ── Base de données PostgreSQL ────────────────────────────────────────────────
+# Priorité : DATABASE_URL (Railway l'injecte automatiquement pour le service
+# PostgreSQL lié) → sinon variables individuelles DB_* pour Docker/local.
+_DATABASE_URL = config('DATABASE_URL', default='')
+if _DATABASE_URL:
+    DATABASES = {
+        'default': {
+            **dj_database_url.parse(_DATABASE_URL, conn_max_age=600),
+            'OPTIONS': {'options': '-c search_path=public'},
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE':   'django.db.backends.postgresql',
+            'NAME':     config('DB_NAME',     default='registre_commerce'),
+            'USER':     config('DB_USER',     default='rc_user'),
+            'PASSWORD': config('DB_PASSWORD', default='rc_password_secret'),
+            'HOST':     config('DB_HOST',     default='localhost'),
+            'PORT':     config('DB_PORT',     default='5432'),
+            'OPTIONS':  {'options': '-c search_path=public'},
+        }
+    }
 
 # Modèle utilisateur personnalisé
 AUTH_USER_MODEL = 'utilisateurs.Utilisateur'
