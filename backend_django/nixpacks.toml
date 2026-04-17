@@ -8,5 +8,5 @@
 # fontconfig        : enregistrement des polices (fc-cache) pour que ReportLab les trouve
 aptPkgs = ["fonts-dejavu-core", "fonts-noto-core", "fontconfig"]
 
-[start]
-cmd = "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn registre_rc.wsgi:application --bind 0.0.0.0:$PORT --workers 4 --timeout 120 --access-logfile - --error-logfile -"
+# Note : la commande de démarrage est définie dans railway.json (startCommand)
+# et non ici pour éviter les conflits. Ne pas ajouter de section [start] ici.
