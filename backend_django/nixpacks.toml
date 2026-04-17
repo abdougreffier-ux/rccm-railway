@@ -1,0 +1,12 @@
+# ── Configuration Nixpacks pour Railway ──────────────────────────────────────
+# Railway détecte automatiquement Python/Django via requirements.txt.
+# Ce fichier ajoute les dépendances système non-Python.
+
+[phases.setup]
+# fonts-dejavu-core : DejaVuSans.ttf → rendu Unicode Latin dans ReportLab
+# fonts-noto-core   : polices Noto   → rendu arabe RTL dans les PDF officiels
+# fontconfig        : enregistrement des polices (fc-cache) pour que ReportLab les trouve
+aptPkgs = ["fonts-dejavu-core", "fonts-noto-core", "fontconfig"]
+
+[start]
+cmd = "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn registre_rc.wsgi:application --bind 0.0.0.0:$PORT --workers 4 --timeout 120 --access-logfile - --error-logfile -"

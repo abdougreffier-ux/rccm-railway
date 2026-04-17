@@ -1,0 +1,27 @@
+# ── Dépendances ───────────────────────────────────────────────────────────────
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# ── Build frontend ────────────────────────────────────────────────────────────
+frontend/build/
+
+# ── Fichiers Django générés ───────────────────────────────────────────────────
+backend_django/staticfiles/
+backend_django/media/
+backend_django/logs/
+backend_django/*.log
+
+# ── Variables d'environnement (NE JAMAIS committer) ──────────────────────────
+.env
+backend_django/.env
+*.env.local
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+desktop.ini
+Thumbs.db
+venv/
+*.log

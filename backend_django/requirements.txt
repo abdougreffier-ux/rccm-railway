@@ -1,0 +1,15 @@
+Django==4.2.9
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.3.1
+psycopg2-binary==2.9.9
+django-filter==23.5
+Pillow==10.4.0
+qrcode[pil]==7.4.2
+reportlab==4.1.0
+arabic-reshaper==3.0.0
+python-bidi==0.4.2
+openpyxl==3.1.2
+python-decouple==3.8
+whitenoise==6.6.0
+gunicorn==21.2.0
