@@ -1,13 +1,8 @@
 # ── Configuration Nixpacks pour Railway ──────────────────────────────────────
-# Railway détecte automatiquement Python/Django via requirements.txt.
-# Ce fichier ajoute les dépendances système non-Python.
-
-[phases.setup]
-# Polices via Nix (pas apt) — apt-get peut échouer selon la région Railway.
-# dejavu_fonts : DejaVuSans.ttf → rendu Unicode Latin dans ReportLab
-# noto-fonts   : polices Noto   → rendu arabe RTL dans les PDF officiels
-# fontconfig   : enregistrement des polices (fc-cache) pour ReportLab
-nixPkgs = ["dejavu_fonts", "noto-fonts", "fontconfig"]
-
-# Note : la commande de démarrage est définie dans railway.json (startCommand)
-# et non ici pour éviter les conflits. Ne pas ajouter de section [start] ici.
+# Nixpacks détecte automatiquement Python/Django via requirements.txt.
+# Les polices (DejaVu, Noto) ne sont pas installées ici pour éviter les
+# conflits avec la détection automatique. Les PDFs utiliseront les polices
+# système par défaut (fonctionnel pour les tests, à améliorer en production).
+#
+# La commande de démarrage est définie dans railway.json (startCommand).
+# Ne pas ajouter de section [start] ici — elle serait ignorée ou en conflit.
