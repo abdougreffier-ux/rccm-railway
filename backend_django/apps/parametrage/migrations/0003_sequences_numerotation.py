@@ -7,11 +7,15 @@ seule source de vérité — cette migration crée donc les objets SQL "hors mod
 
 Utilise IF NOT EXISTS / CREATE OR REPLACE pour rester idempotente et ne pas
 casser les environnements Docker existants où la table est déjà présente.
+
+Chaque opération SQL est séparée pour éviter tout problème de parsing
+(dollar-quoting PL/pgSQL, etc.).
 """
 
 from django.db import migrations
 
 
+# ── 1. Création de la table ───────────────────────────────────────────────────
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS sequences_numerotation (
     id          SERIAL PRIMARY KEY,
@@ -22,9 +26,10 @@ CREATE TABLE IF NOT EXISTS sequences_numerotation (
     nb_chiffres INTEGER DEFAULT 6,
     localite_id INTEGER REFERENCES localites(id),
     updated_at  TIMESTAMP DEFAULT NOW()
-);
+)
 """
 
+# ── 2. Données initiales ──────────────────────────────────────────────────────
 SEED_SQL = """
 INSERT INTO sequences_numerotation (code, prefixe, annee, dernier_num, nb_chiffres) VALUES
   ('RA',     'RA',  EXTRACT(YEAR FROM NOW()), 0, 6),
@@ -34,52 +39,56 @@ INSERT INTO sequences_numerotation (code, prefixe, annee, dernier_num, nb_chiffr
   ('MOD',    'MOD', EXTRACT(YEAR FROM NOW()), 0, 6),
   ('RAD',    'RAD', EXTRACT(YEAR FROM NOW()), 0, 6),
   ('CES',    'CES', EXTRACT(YEAR FROM NOW()), 0, 6)
-ON CONFLICT (code) DO NOTHING;
+ON CONFLICT (code) DO NOTHING
 """
 
-CREATE_FUNCTION_SQL = """
-CREATE OR REPLACE FUNCTION generer_numero(p_code VARCHAR, p_localite_id INTEGER DEFAULT NULL)
-RETURNS VARCHAR AS $$
-DECLARE
-    v_seq        sequences_numerotation%%ROWTYPE;
-    v_annee      INTEGER;
-    v_num        INTEGER;
-    v_resultat   VARCHAR;
-BEGIN
-    v_annee := EXTRACT(YEAR FROM NOW());
+# ── 3. Fonction PL/pgSQL ──────────────────────────────────────────────────────
+# NOTE : %ROWTYPE est syntaxe PostgreSQL (un seul %).
+#        RunSQL passe la chaîne directement à cursor.execute(sql) SANS params,
+#        donc psycopg2 ne tente pas de substitution et % reste % tel quel.
+CREATE_FUNCTION_SQL = (
+    "CREATE OR REPLACE FUNCTION generer_numero("
+    "    p_code VARCHAR, p_localite_id INTEGER DEFAULT NULL"
+    ") "
+    "RETURNS VARCHAR AS $func$ "
+    "DECLARE "
+    "    v_seq        sequences_numerotation%ROWTYPE; "
+    "    v_annee      INTEGER; "
+    "    v_num        INTEGER; "
+    "    v_resultat   VARCHAR; "
+    "BEGIN "
+    "    v_annee := EXTRACT(YEAR FROM NOW()); "
+    "    SELECT * INTO v_seq "
+    "    FROM sequences_numerotation "
+    "    WHERE code = p_code "
+    "    AND (localite_id = p_localite_id "
+    "         OR (localite_id IS NULL AND p_localite_id IS NULL)) "
+    "    FOR UPDATE; "
+    "    IF NOT FOUND THEN "
+    "        RAISE EXCEPTION 'Séquence % non trouvée', p_code; "
+    "    END IF; "
+    "    IF v_seq.annee != v_annee THEN "
+    "        UPDATE sequences_numerotation "
+    "        SET annee = v_annee, dernier_num = 1, updated_at = NOW() "
+    "        WHERE code = p_code; "
+    "        v_num := 1; "
+    "    ELSE "
+    "        v_num := v_seq.dernier_num + 1; "
+    "        UPDATE sequences_numerotation "
+    "        SET dernier_num = v_num, updated_at = NOW() "
+    "        WHERE code = p_code; "
+    "    END IF; "
+    "    v_resultat := COALESCE(v_seq.prefixe, '') || "
+    "                  v_annee::TEXT || "
+    "                  LPAD(v_num::TEXT, v_seq.nb_chiffres, '0'); "
+    "    RETURN v_resultat; "
+    "END; "
+    "$func$ LANGUAGE plpgsql"
+)
 
-    SELECT * INTO v_seq
-    FROM sequences_numerotation
-    WHERE code = p_code
-    AND (localite_id = p_localite_id OR (localite_id IS NULL AND p_localite_id IS NULL))
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Séquence % non trouvée', p_code;
-    END IF;
-
-    IF v_seq.annee != v_annee THEN
-        UPDATE sequences_numerotation
-        SET annee = v_annee, dernier_num = 1, updated_at = NOW()
-        WHERE code = p_code;
-        v_num := 1;
-    ELSE
-        v_num := v_seq.dernier_num + 1;
-        UPDATE sequences_numerotation
-        SET dernier_num = v_num, updated_at = NOW()
-        WHERE code = p_code;
-    END IF;
-
-    v_resultat := COALESCE(v_seq.prefixe, '') ||
-                  v_annee::TEXT ||
-                  LPAD(v_num::TEXT, v_seq.nb_chiffres, '0');
-    RETURN v_resultat;
-END;
-$$ LANGUAGE plpgsql;
-"""
-
-DROP_FUNCTION_SQL = "DROP FUNCTION IF EXISTS generer_numero(VARCHAR, INTEGER);"
-DROP_TABLE_SQL    = "DROP TABLE IF EXISTS sequences_numerotation;"
+# ── Reverse ───────────────────────────────────────────────────────────────────
+DROP_FUNCTION_SQL = "DROP FUNCTION IF EXISTS generer_numero(VARCHAR, INTEGER)"
+DROP_TABLE_SQL    = "DROP TABLE IF EXISTS sequences_numerotation"
 
 
 class Migration(migrations.Migration):
@@ -89,8 +98,18 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # Chaque opération est séparée pour isoler les erreurs éventuelles
+        # et éviter que sqlparse ne découpe le PL/pgSQL sur les ; internes.
         migrations.RunSQL(
-            sql     = CREATE_TABLE_SQL + SEED_SQL + CREATE_FUNCTION_SQL,
-            reverse_sql = DROP_FUNCTION_SQL + DROP_TABLE_SQL,
+            sql         = CREATE_TABLE_SQL,
+            reverse_sql = DROP_TABLE_SQL,
+        ),
+        migrations.RunSQL(
+            sql         = SEED_SQL,
+            reverse_sql = migrations.RunSQL.noop,
+        ),
+        migrations.RunSQL(
+            sql         = CREATE_FUNCTION_SQL,
+            reverse_sql = DROP_FUNCTION_SQL,
         ),
     ]
