@@ -77,6 +77,7 @@ const getNatureOptions = (typeEntite) =>
 
 // ── Sous-composant table bénéficiaires éditable ───────────────────────────────
 const BeneficiairesEditable = ({ rows, setRows, nationalites, isAr, typeEntite }) => {
+  const { t } = useLanguage();                    // ← requis pour t('field.civilite')
   const [open,    setOpen]    = useState(false);
   const [editing, setEditing] = useState(null);
   const [form]    = Form.useForm();

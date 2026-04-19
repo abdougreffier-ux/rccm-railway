@@ -3,6 +3,7 @@ import { Layout, theme } from 'antd';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import AppHeader from './AppHeader';
+import ErrorBoundary from '../ErrorBoundary/ErrorBoundary';
 
 const { Content } = Layout;
 
@@ -23,7 +24,9 @@ const AppLayout = () => {
           minHeight: 280,
           overflow: 'auto',
         }}>
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </Content>
       </Layout>
     </Layout>
