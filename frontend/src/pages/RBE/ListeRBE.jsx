@@ -195,13 +195,15 @@ const ListeRBE = () => {
       ),
     },
     {
-      title:     isAr ? 'نمط الإقرار' : 'Mode décl.',
+      title:     isAr ? 'نمط التصريح' : 'Mode décl.',
       dataIndex: 'mode_declaration',
       key:       'mode_decl',
-      width:     130,
+      width:     140,
       render:    v => v ? (
         <Tag color={MODE_DECL_COLOR[v] || 'default'} style={{ fontSize: 11 }}>
-          {v === 'IMMEDIATE' ? 'Immédiat' : 'Différé 15j'}
+          {v === 'IMMEDIATE'
+            ? (isAr ? t('rbe.declImmediate')  : 'Déclaration immédiate')
+            : (isAr ? t('rbe.declDifferee')   : 'Déclaration différée (15j)')}
         </Tag>
       ) : null,
     },
@@ -429,7 +431,7 @@ const ListeRBE = () => {
     // ── Onglet Toutes ─────────────────────────────────────────────────────────
     {
       key: 'toutes',
-      label: isAr ? 'جميع الإقرارات' : 'Toutes les déclarations',
+      label: t('rbe.toutesDeclarations'),
       children: (
         <div>
           <FilterBar showSource />
@@ -473,7 +475,7 @@ const ListeRBE = () => {
             icon={<PlusOutlined />}
             onClick={() => navigate('/registres/rbe/nouvelle?source=HORS_RC')}
           >
-            {isAr ? 'إقرار — خارج السجل' : 'Nouvelle déclaration (hors RC)'}
+            {t('rbe.nouvelleDeclHorsRC')}
           </Button>
           <Button
             type="primary"
@@ -481,7 +483,7 @@ const ListeRBE = () => {
             onClick={() => navigate('/registres/rbe/nouvelle')}
             style={{ background: '#1a4480' }}
           >
-            {t('rbe.new') || 'Nouvelle déclaration (RC)'}
+            {t('rbe.nouvelleDeclRC')}
           </Button>
         </Space>
       </div>

@@ -144,11 +144,11 @@ const BeneficiairesEditable = ({ rows, setRows, nationalites, isAr, typeEntite }
   return (
     <Card
       size="small"
-      title={<Text strong>Bénéficiaires effectifs</Text>}
+      title={<Text strong>{t('rbe.beneficiaires')}</Text>}
       extra={
         <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openAdd}
           style={{ background: '#1a4480' }}>
-          Ajouter
+          {t('rbe.addBeneficiaire')}
         </Button>
       }
       style={{ marginBottom: 16 }}
@@ -164,7 +164,9 @@ const BeneficiairesEditable = ({ rows, setRows, nationalites, isAr, typeEntite }
       )}
 
       <Modal
-        title={editing ? 'Modifier le bénéficiaire' : 'Ajouter un bénéficiaire'}
+        title={editing
+          ? (isAr ? 'تعديل بيانات المستفيد الحقيقي' : 'Modifier le bénéficiaire effectif')
+          : t('rbe.addBeneficiaire')}
         open={open}
         onOk={handleOk}
         onCancel={() => { setOpen(false); form.resetFields(); }}
@@ -416,13 +418,13 @@ const FormulaireRBE = () => {
           {t('common.back')}
         </Button>
         <Title level={4} style={{ margin: 0 }}>
-          📋 {t('rbe.new') || 'Nouvelle déclaration RBE'} — Initiale
+          📋 {t('rbe.declarationBE')} — {isAr ? 'أولية' : 'Initiale'}
         </Title>
       </div>
 
       {/* ── 0. Source de l'entité ─────────────────────────────────────────────── */}
       <Card
-        title="0 — Source de l'entité"
+        title={`0 — ${t('rbe.sourceEntite')}`}
         style={{ marginBottom: 16 }}
         styles={{ header: { background: '#f0f5ff' } }}
       >
@@ -432,16 +434,16 @@ const FormulaireRBE = () => {
           size="large"
         >
           <Radio.Button value="RC">
-            <BankOutlined /> Entité inscrite au Registre du Commerce (RC)
+            <BankOutlined /> {t('rbe.entiteRC')}
           </Radio.Button>
           <Radio.Button value="HORS_RC">
-            <ShopOutlined /> Entité hors Registre du Commerce (Association, ONG, Fondation, Fiducie…)
+            <ShopOutlined /> {t('rbe.entiteHorsRC')}
           </Radio.Button>
         </Radio.Group>
       </Card>
 
       {/* ── 1. Type d'entité + Mode de déclaration ───────────────────────────── */}
-      <Card title="1 — Type d'entité et mode de déclaration" style={{ marginBottom: 16 }}>
+      <Card title={`1 — ${t('rbe.typeEntiteMode')}`} style={{ marginBottom: 16 }}>
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="Type d'entité" required>
@@ -457,15 +459,15 @@ const FormulaireRBE = () => {
             <Form.Item label="Mode de déclaration" required>
               <Radio.Group value={modeDecl} onChange={e => setModeDecl(e.target.value)}>
                 <Radio value="IMMEDIATE">
-                  <Text strong>Déclaration immédiate</Text>
+                  <Text strong>{t('rbe.declImmediate')}</Text>
                   <div style={{ fontSize: 12, color: '#666' }}>
-                    Bénéficiaires effectifs connus dès maintenant
+                    {t('rbe.declImmediateInfo')}
                   </div>
                 </Radio>
                 <Radio value="DIFFEREE" style={{ marginTop: 8 }}>
-                  <Text strong>Déclaration différée (15 jours)</Text>
+                  <Text strong>{t('rbe.declDifferee')}</Text>
                   <div style={{ fontSize: 12, color: '#666' }}>
-                    Les bénéficiaires seront déclarés dans un délai de 15 jours
+                    {t('rbe.declDiffereeInfo')}
                   </div>
                 </Radio>
               </Radio.Group>
@@ -474,7 +476,9 @@ const FormulaireRBE = () => {
                   type="warning"
                   showIcon
                   style={{ marginTop: 8 }}
-                  message="Le délai de 15 jours est calculé à partir de la date de déclaration. Tout dépassement entraîne un passage en statut EN RETARD."
+                  message={isAr
+                    ? 'يُحسب أجل الـ 15 يوماً من تاريخ التصريح. يؤدي أي تجاوز إلى انتقال الملف إلى حالة "متأخر".'
+                    : 'Le délai de 15 jours est calculé à partir de la date de déclaration. Tout dépassement entraîne un passage en statut EN RETARD.'}
                 />
               )}
             </Form.Item>
@@ -651,7 +655,7 @@ const FormulaireRBE = () => {
 
         {/* ── 6. Bénéficiaires effectifs ────────────────────────────────────────── */}
         {modeDecl === 'IMMEDIATE' && (
-          <Card title="6 — Bénéficiaires effectifs" style={{ marginBottom: 16 }}>
+          <Card title={`6 — ${t('rbe.beneficiaires')}`} style={{ marginBottom: 16 }}>
             <BeneficiairesEditable
               rows={beneficiaires}
               setRows={setBeneficiaires}
@@ -664,14 +668,16 @@ const FormulaireRBE = () => {
 
         {modeDecl === 'DIFFEREE' && (
           <Card
-            title="6 — Bénéficiaires effectifs (déclaration différée)"
+            title={`6 — ${t('rbe.beneficiaires')} (${t('rbe.declDifferee')})`}
             style={{ marginBottom: 16 }}
           >
             <Alert
               type="info"
               showIcon
-              message="Déclaration différée sélectionnée"
-              description="Les bénéficiaires effectifs devront être déclarés dans les 15 jours suivant la date de déclaration. La déclaration sera enregistrée en statut EN ATTENTE."
+              message={isAr ? t('rbe.declDifferee') : 'Déclaration différée sélectionnée'}
+              description={isAr
+                ? 'سيتم التصريح بالمستفيدين الحقيقيين خلال أجل 15 يوماً من تاريخ التصريح. سيُسجَّل الملف في حالة "في انتظار التحقق".'
+                : "Les bénéficiaires effectifs devront être déclarés dans les 15 jours suivant la date de déclaration. La déclaration sera enregistrée en statut EN ATTENTE."}
             />
           </Card>
         )}
