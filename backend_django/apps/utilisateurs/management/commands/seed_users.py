@@ -114,8 +114,8 @@ USERS_TO_SEED = [
     # ── Agents du Tribunal ────────────────────────────────────────────────────
     {
         'login':      'agent1',
-        'nom':        'Ould Mohamed',
-        'prenom':     'Ahmed',
+        'nom':        'TEST',
+        'prenom':     'Ahmedou',
         'email':      'agent1@rccm.mr',
         'password':   'Agent2026!',
         'role_code':  'AGENT_TRIBUNAL',
@@ -124,8 +124,8 @@ USERS_TO_SEED = [
     },
     {
         'login':      'agent2',
-        'nom':        'Mint Cheikh',
-        'prenom':     'Mariem',
+        'nom':        'TEST',
+        'prenom':     'Sow',
         'email':      'agent2@rccm.mr',
         'password':   'Agent2026!',
         'role_code':  'AGENT_TRIBUNAL',
