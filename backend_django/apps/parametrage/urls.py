@@ -4,6 +4,7 @@ from .views import *
 urlpatterns = [
     path('nationalites/',            NationaliteListCreate.as_view()),
     path('nationalites/<int:pk>/',   NationaliteDetail.as_view()),
+    path('nationalites/import/',     NationaliteImportView.as_view()),
 
     path('formes-juridiques/',           FormeJuridiqueListCreate.as_view()),
     path('formes-juridiques/<int:pk>/',  FormeJuridiqueDetail.as_view()),

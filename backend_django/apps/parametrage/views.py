@@ -2,6 +2,7 @@ from django.db import connection
 from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser
 from .models import (
     Nationalite, FormeJuridique, DomaineActivite, Fonction,
     TypeDocument, TypeDemande, Localite, Tarif, Signataire,
@@ -25,6 +26,120 @@ class NationaliteDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [LectureAgentModifGreffier]
     queryset         = Nationalite.objects.all()
     serializer_class = NationaliteSerializer
+
+
+class NationaliteImportView(APIView):
+    """
+    POST /parametrage/nationalites/import/
+    Importe des nationalités depuis un fichier Excel (.xlsx).
+    Colonnes requises : code, libelle_fr, libelle_ar
+    Réservé au greffier (EstGreffier).
+    Retourne : { total, created, duplicates, errors }
+    """
+    permission_classes = [EstGreffier]
+    parser_classes     = [MultiPartParser]
+
+    REQUIRED_COLS = {'code', 'libelle_fr', 'libelle_ar'}
+
+    def post(self, request):
+        try:
+            import openpyxl
+        except ImportError:
+            return Response(
+                {'detail': 'openpyxl non disponible sur le serveur.'},
+                status=500,
+            )
+
+        fichier = request.FILES.get('fichier')
+        if not fichier:
+            return Response({'detail': 'Aucun fichier fourni (champ : fichier).'}, status=400)
+
+        # ── Lecture du classeur ───────────────────────────────────────────────
+        try:
+            wb = openpyxl.load_workbook(fichier, read_only=True, data_only=True)
+        except Exception as exc:
+            return Response({'detail': f'Fichier Excel invalide : {exc}'}, status=400)
+
+        ws = wb.active
+
+        # ── Extraction des en-têtes (1re ligne) ───────────────────────────────
+        headers = [str(cell.value).strip().lower() if cell.value is not None else ''
+                   for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+        missing = self.REQUIRED_COLS - set(headers)
+        if missing:
+            return Response(
+                {'detail': f'Colonnes manquantes dans le fichier : {", ".join(sorted(missing))}'},
+                status=400,
+            )
+
+        col_idx = {name: headers.index(name) for name in self.REQUIRED_COLS}
+
+        # ── Parcours des lignes ───────────────────────────────────────────────
+        total      = 0
+        created    = 0
+        duplicates = []
+        errors     = []
+
+        for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            # Ignorer les lignes entièrement vides
+            if all(v is None or str(v).strip() == '' for v in row):
+                continue
+
+            total += 1
+
+            def cell(col):
+                v = row[col_idx[col]]
+                return str(v).strip() if v is not None else ''
+
+            code       = cell('code')
+            libelle_fr = cell('libelle_fr')
+            libelle_ar = cell('libelle_ar')
+
+            # ── Validation : champs obligatoires ─────────────────────────────
+            manquants = []
+            if not code:       manquants.append('code')
+            if not libelle_fr: manquants.append('libelle_fr')
+            if not libelle_ar: manquants.append('libelle_ar')
+            if manquants:
+                errors.append({
+                    'ligne': row_num,
+                    'code': code or '(vide)',
+                    'raison': f'Champ(s) obligatoire(s) absent(s) : {", ".join(manquants)}',
+                })
+                continue
+
+            # ── Tronquer si dépassement max_length ────────────────────────────
+            code = code[:5]
+
+            # ── Détection doublon ─────────────────────────────────────────────
+            if Nationalite.objects.filter(code=code).exists():
+                duplicates.append({'ligne': row_num, 'code': code})
+                continue
+
+            # ── Création ──────────────────────────────────────────────────────
+            try:
+                Nationalite.objects.create(
+                    code=code,
+                    libelle_fr=libelle_fr[:100],
+                    libelle_ar=libelle_ar[:100],
+                    actif=True,
+                )
+                created += 1
+            except Exception as exc:
+                errors.append({
+                    'ligne': row_num,
+                    'code': code,
+                    'raison': str(exc),
+                })
+
+        wb.close()
+
+        return Response({
+            'total':      total,
+            'created':    created,
+            'duplicates': duplicates,
+            'errors':     errors,
+        }, status=201 if created > 0 else 200)
 
 
 # ── Formes juridiques ─────────────────────────────────────────────────────────

@@ -427,6 +427,9 @@ export const parametrageAPI = {
   nationalites:        (params) => api.get('/parametrage/nationalites/', { params }),
   createNationalite:   (data)   => api.post('/parametrage/nationalites/', data),
   updateNationalite:   (id, d)  => api.put(`/parametrage/nationalites/${id}/`, d),
+  importNationalites:  (formData) => api.post('/parametrage/nationalites/import/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
 
   formesJuridiques:        (params) => api.get('/parametrage/formes-juridiques/', { params }),
   createFormeJuridique:    (data)   => api.post('/parametrage/formes-juridiques/', data),

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Table, Button, Tag, Typography, Tabs, Modal, Form, Input, Select,
-  message, Tooltip, InputNumber, Space, Spin,
+  message, Tooltip, InputNumber, Space, Spin, Upload, Alert,
 } from 'antd';
-import { PlusOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, SaveOutlined, UploadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { parametrageAPI } from '../../api/api';
 import PAYS from '../../data/pays';
@@ -12,7 +12,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 const { Title, Text } = Typography;
 
 // ── Onglet générique CRUD ─────────────────────────────────────────────────────
-const ParamTab = ({ queryKey, queryFn, createFn, updateFn, columns, formFields, title }) => {
+const ParamTab = ({ queryKey, queryFn, createFn, updateFn, columns, formFields, title, extraActions }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing,   setEditing]   = useState(null);
   const [form]      = Form.useForm();
@@ -51,7 +51,8 @@ const ParamTab = ({ queryKey, queryFn, createFn, updateFn, columns, formFields, 
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+        {extraActions}
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} style={{ background: '#1a4480' }}>
           {t('action.add')}
         </Button>
@@ -80,6 +81,167 @@ const ParamTab = ({ queryKey, queryFn, createFn, updateFn, columns, formFields, 
         </Form>
       </Modal>
     </div>
+  );
+};
+
+// ── Modal Import Excel — Nationalités ────────────────────────────────────────
+const NationaliteImportModal = ({ open, onClose, onSuccess }) => {
+  const { t, isAr } = useLanguage();
+  const queryClient  = useQueryClient();
+  const [file,    setFile]    = useState(null);
+  const [result,  setResult]  = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const reset = () => { setFile(null); setResult(null); };
+
+  const handleClose = () => { reset(); onClose(); };
+
+  const handleImport = async () => {
+    if (!file) {
+      message.warning(isAr ? 'يرجى اختيار ملف Excel أولاً' : 'Veuillez sélectionner un fichier Excel.');
+      return;
+    }
+    setLoading(true);
+    setResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('fichier', file);
+      const res = await parametrageAPI.importNationalites(formData);
+      setResult(res.data);
+      queryClient.invalidateQueries({ queryKey: ['nationalites-admin'] });
+      if (onSuccess) onSuccess(res.data);
+    } catch (err) {
+      const detail = err.response?.data?.detail || (isAr ? 'حدث خطأ أثناء الاستيراد' : 'Erreur lors de l\'import.');
+      message.error(detail);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const uploadProps = {
+    accept: '.xlsx',
+    beforeUpload: (f) => { setFile(f); setResult(null); return false; },
+    onRemove: () => { setFile(null); setResult(null); },
+    fileList: file ? [{ uid: '1', name: file.name, status: 'done' }] : [],
+    maxCount: 1,
+  };
+
+  return (
+    <Modal
+      title={
+        <span>
+          <FileExcelOutlined style={{ color: '#52c41a', marginRight: 8 }} />
+          {isAr ? 'استيراد الجنسيات من Excel' : 'Importer les nationalités depuis Excel'}
+        </span>
+      }
+      open={open}
+      onCancel={handleClose}
+      footer={[
+        <Button key="cancel" onClick={handleClose}>
+          {t('action.cancel')}
+        </Button>,
+        <Button
+          key="import"
+          type="primary"
+          icon={<UploadOutlined />}
+          loading={loading}
+          disabled={!file}
+          onClick={handleImport}
+          style={{ background: '#1a4480' }}
+        >
+          {isAr ? 'استيراد' : 'Importer'}
+        </Button>,
+      ]}
+      width={600}
+    >
+      {/* Instructions */}
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message={isAr ? 'تنسيق الملف المطلوب' : 'Format de fichier requis'}
+        description={
+          <div>
+            {isAr
+              ? 'يجب أن يحتوي ملف Excel على الأعمدة التالية في السطر الأول :'
+              : 'Le fichier Excel doit contenir les colonnes suivantes en 1re ligne :'}
+            <br />
+            <code style={{ background: '#f0f0f0', padding: '2px 6px', borderRadius: 3 }}>
+              code &nbsp;|&nbsp; libelle_fr &nbsp;|&nbsp; libelle_ar
+            </code>
+            <br />
+            <small style={{ color: '#888' }}>
+              {isAr
+                ? '— الحقول الثلاثة مطلوبة. الصفوف غير المكتملة سيتم رفضها.'
+                : '— Les 3 champs sont obligatoires. Les lignes incomplètes seront rejetées.'}
+            </small>
+          </div>
+        }
+      />
+
+      {/* Sélecteur de fichier */}
+      <Upload {...uploadProps}>
+        <Button icon={<UploadOutlined />}>
+          {isAr ? 'اختيار ملف .xlsx' : 'Choisir un fichier .xlsx'}
+        </Button>
+      </Upload>
+
+      {/* Résultats */}
+      {result && (
+        <div style={{ marginTop: 20 }}>
+          <Alert
+            type={result.errors?.length > 0 || result.duplicates?.length > 0 ? 'warning' : 'success'}
+            showIcon
+            message={
+              <span>
+                {isAr
+                  ? `تمت المعالجة: ${result.total} سطر — إنشاء: ${result.created} — مكررات: ${result.duplicates?.length ?? 0} — أخطاء: ${result.errors?.length ?? 0}`
+                  : `Traité : ${result.total} ligne(s) — Créé : ${result.created} — Doublon(s) : ${result.duplicates?.length ?? 0} — Erreur(s) : ${result.errors?.length ?? 0}`}
+              </span>
+            }
+          />
+
+          {/* Tableau des doublons */}
+          {result.duplicates?.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <strong style={{ color: '#faad14' }}>
+                {isAr ? 'مكررات (تم تجاهلها) :' : 'Doublons ignorés :'}
+              </strong>
+              <Table
+                size="small"
+                pagination={false}
+                dataSource={result.duplicates.map((d, i) => ({ ...d, key: i }))}
+                columns={[
+                  { title: isAr ? 'السطر' : 'Ligne', dataIndex: 'ligne', width: 70 },
+                  { title: isAr ? 'الرمز' : 'Code',  dataIndex: 'code' },
+                ]}
+                style={{ marginTop: 6 }}
+              />
+            </div>
+          )}
+
+          {/* Tableau des erreurs */}
+          {result.errors?.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <strong style={{ color: '#ff4d4f' }}>
+                {isAr ? 'أخطاء :' : 'Erreurs :'}
+              </strong>
+              <Table
+                size="small"
+                pagination={false}
+                dataSource={result.errors.map((e, i) => ({ ...e, key: i }))}
+                columns={[
+                  { title: isAr ? 'السطر'  : 'Ligne',  dataIndex: 'ligne',  width: 70 },
+                  { title: isAr ? 'الرمز'  : 'Code',   dataIndex: 'code',   width: 80 },
+                  { title: isAr ? 'السبب'  : 'Raison', dataIndex: 'raison', ellipsis: true },
+                ]}
+                style={{ marginTop: 6 }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 };
 
@@ -238,6 +400,52 @@ const NumerotationTab = () => {
   );
 };
 
+// ── Onglet Nationalités (avec import Excel) ───────────────────────────────────
+const NationalitesTab = () => {
+  const { t, isAr } = useLanguage();
+  const [importOpen, setImportOpen] = useState(false);
+
+  return (
+    <>
+      <NationaliteImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSuccess={(res) => {
+          if (res.created > 0) {
+            message.success(
+              isAr
+                ? `تم إنشاء ${res.created} جنسية بنجاح`
+                : `${res.created} nationalité(s) importée(s) avec succès`
+            );
+          }
+        }}
+      />
+      <ParamTab
+        title={t('param.nationalites')}
+        queryKey="nationalites-admin"
+        queryFn={parametrageAPI.nationalites}
+        createFn={(d) => parametrageAPI.createNationalite(d)}
+        updateFn={(id, d) => parametrageAPI.updateNationalite(id, d)}
+        columns={[
+          { title: t('param.code'),       dataIndex: 'code',       key: 'code',       width: 80 },
+          { title: t('param.libelle_fr'), dataIndex: 'libelle_fr', key: 'libelle_fr', sorter: true },
+          { title: t('param.libelle_ar'), dataIndex: 'libelle_ar', key: 'libelle_ar' },
+        ]}
+        formFields={(form) => <NationaliteForm form={form} />}
+        extraActions={
+          <Button
+            icon={<FileExcelOutlined />}
+            onClick={() => setImportOpen(true)}
+            style={{ borderColor: '#52c41a', color: '#52c41a' }}
+          >
+            {isAr ? 'استيراد من Excel' : 'Importer depuis Excel'}
+          </Button>
+        }
+      />
+    </>
+  );
+};
+
 // ── Page Paramétrage ──────────────────────────────────────────────────────────
 const Parametrage = () => {
   const { t } = useLanguage();
@@ -246,21 +454,7 @@ const Parametrage = () => {
     {
       key: 'nationalites',
       label: t('param.nationalites'),
-      children: (
-        <ParamTab
-          title={t('param.nationalites')}
-          queryKey="nationalites-admin"
-          queryFn={parametrageAPI.nationalites}
-          createFn={(d) => parametrageAPI.createNationalite(d)}
-          updateFn={(id, d) => parametrageAPI.updateNationalite(id, d)}
-          columns={[
-            { title: t('param.code'),      dataIndex: 'code',       key: 'code',       width: 80 },
-            { title: t('param.libelle_fr'),dataIndex: 'libelle_fr', key: 'libelle_fr', sorter: true },
-            { title: t('param.libelle_ar'),dataIndex: 'libelle_ar', key: 'libelle_ar' },
-          ]}
-          formFields={(form) => <NationaliteForm form={form} />}
-        />
-      ),
+      children: <NationalitesTab />,
     },
     {
       key: 'formes-juridiques',
