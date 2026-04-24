@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Tag, Typography, Tooltip, Select } from 'antd';
+import { Table, Button, Space, Tag, Typography, Tooltip, Select, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -12,7 +12,7 @@ const ListeCessions = () => {
   const [page,   setPage]   = useState(1);
   const [statut, setStatut] = useState('');
   const navigate            = useNavigate();
-  const { t }               = useLanguage();
+  const { t, isAr }         = useLanguage();
   const STATUT_CONFIG = {
     BROUILLON:   { color: 'default',    label: t('status.brouillon')   },
     EN_INSTANCE: { color: 'processing', label: t('status.enInstance2') },
@@ -21,7 +21,7 @@ const ListeCessions = () => {
     ANNULE:      { color: 'error',      label: t('status.annule')      },
   };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['cessions', page, statut],
     queryFn:  () => cessionAPI.list({ page, statut: statut || undefined }).then(r => r.data),
     keepPreviousData: true,
@@ -97,6 +97,17 @@ const ListeCessions = () => {
           Nouvelle cession
         </Button>
       </div>
+      {isError && (
+        <Alert
+          type="warning"
+          showIcon
+          message={isAr ? 'تعذّر تحميل التنازلات' : 'Impossible de charger les cessions'}
+          description={isAr
+            ? 'تحقق من صلاحياتك أو أعد تحميل الصفحة.'
+            : 'Vérifiez vos permissions ou rechargez la page.'}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <div style={{ marginBottom: 16 }}>
         <Select placeholder="Filtrer par statut" value={statut || undefined}
           onChange={v => { setStatut(v || ''); setPage(1); }}

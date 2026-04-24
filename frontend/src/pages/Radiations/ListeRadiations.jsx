@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Tag, Typography, Select, Button, Space } from 'antd';
+import { Table, Tag, Typography, Select, Button, Space, Alert } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -21,7 +21,7 @@ const ListeRadiations = () => {
     ANNULEE:  { color: 'default',    label: t('status.annulee')  },
   };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['radiations', page, statut],
     queryFn:  () => radiationAPI.list({ page, statut: statut || undefined }).then(r => r.data),
     keepPreviousData: true,
@@ -51,6 +51,18 @@ const ListeRadiations = () => {
           Nouvelle radiation
         </Button>
       </div>
+
+      {isError && (
+        <Alert
+          type="warning"
+          showIcon
+          message={isAr ? 'تعذّر تحميل الشطب' : 'Impossible de charger les radiations'}
+          description={isAr
+            ? 'تحقق من صلاحياتك أو أعد تحميل الصفحة.'
+            : 'Vérifiez vos permissions ou rechargez la page.'}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       <Space style={{ marginBottom: 16 }}>
         <Select

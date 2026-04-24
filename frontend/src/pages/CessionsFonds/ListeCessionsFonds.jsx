@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Tag, Typography, Tooltip, Select } from 'antd';
+import { Table, Button, Space, Tag, Typography, Tooltip, Select, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -25,7 +25,7 @@ const ListeCessionsFonds = () => {
   const navigate = useNavigate();
   const { isAr } = useLanguage();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['cessions-fonds', page, statut],
     queryFn:  () => cessionsFondsAPI.list({ page, statut: statut || undefined }).then(r => r.data),
     keepPreviousData: true,
@@ -75,6 +75,18 @@ const ListeCessionsFonds = () => {
           {isAr ? 'تنازل جديد' : 'Nouvelle cession de fonds'}
         </Button>
       </div>
+
+      {isError && (
+        <Alert
+          type="warning"
+          showIcon
+          message={isAr ? 'تعذّر تحميل التنازلات' : 'Impossible de charger les cessions de fonds'}
+          description={isAr
+            ? 'تحقق من صلاحياتك أو أعد تحميل الصفحة.'
+            : 'Vérifiez vos permissions ou rechargez la page.'}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       <Space style={{ marginBottom: 16 }}>
         <Select

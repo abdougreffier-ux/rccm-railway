@@ -1279,6 +1279,34 @@ class ModificationListCreate(generics.ListCreateAPIView):
             qs = qs.filter(created_by=self.request.user)
         return qs
 
+    def create(self, request, *args, **kwargs):
+        """
+        Bloquer la création par le greffier.
+        Les rectifications post-immatriculation initiées par le greffier sont traitées
+        directement dans le workflow Registre Chronologique ou Immatriculations historiques.
+        Elles ne passent PAS par cet endpoint : si elles y étaient créées, le get_queryset()
+        les exclurait silencieusement (created_by=greffier → exclu), rendant la modification
+        invisible pour tous.
+        """
+        if est_greffier(request.user):
+            return Response(
+                {
+                    'detail': (
+                        "Les inscriptions modificatives sont initiées par les agents du tribunal "
+                        "uniquement. En tant que greffier, utilisez le workflow Registre "
+                        "Chronologique ou Immatriculations historiques pour rectifier un dossier."
+                    ),
+                    'detail_ar': (
+                        "يُنشئ قيود التعديل أعوانُ المحكمة حصراً. "
+                        "بصفتك كاتب ضبط، استخدم سير عمل السجل الزمني "
+                        "أو التسجيلات التاريخية لتصحيح الملف."
+                    ),
+                    'code': 'GREFFIER_CANNOT_CREATE_MODIFICATION',
+                },
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+        return super().create(request, *args, **kwargs)
+
     def _valider_champs_ph(self, ra_id, nouvelles_donnees):
         """Lève ValidationError si la requête tente de modifier l'identité civile d'une PH."""
         if not ra_id:

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Table, Button, Space, Typography, Tooltip, Input, Tag,
+  Table, Button, Space, Typography, Tooltip, Input, Tag, Alert,
 } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -21,7 +21,7 @@ const ListeDepots = () => {
   const isGreffier  = hasRole('GREFFIER');
   const { isAr }    = useLanguage();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['depots', page, search],
     queryFn:  () => depotAPI.list({
       page,
@@ -85,6 +85,18 @@ const ListeDepots = () => {
           Nouveau dépôt
         </Button>
       </div>
+
+      {isError && (
+        <Alert
+          type="warning"
+          showIcon
+          message={isAr ? 'تعذّر تحميل الإيداعات' : 'Impossible de charger les dépôts'}
+          description={isAr
+            ? 'تحقق من صلاحياتك أو أعد تحميل الصفحة.'
+            : 'Vérifiez vos permissions ou rechargez la page.'}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       <div style={{ marginBottom: 16 }}>
         <Search

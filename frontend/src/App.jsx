@@ -106,36 +106,36 @@ const AppRoutes = () => {
         <Route path="demandes/nouvelle"  element={<TribunalRoute><FormulaireDemande /></TribunalRoute>} />
         <Route path="demandes/:id"       element={<TribunalRoute><DetailDemande /></TribunalRoute>} />
 
-        {/* Dépôts */}
-        <Route path="depots"                element={<ListeDepots />} />
-        <Route path="depots/nouveau"        element={<FormulaireDepot />} />
-        <Route path="depots/:id"            element={<DetailDepot />} />
-        <Route path="depots/:id/modifier"   element={<FormulaireDepot />} />
+        {/* Dépôts — interdits à l'Agent GU (cohérence sidebar TRIBUNAL_ONLY) */}
+        <Route path="depots"                element={<TribunalRoute><ListeDepots /></TribunalRoute>} />
+        <Route path="depots/nouveau"        element={<TribunalRoute><FormulaireDepot /></TribunalRoute>} />
+        <Route path="depots/:id"            element={<TribunalRoute><DetailDepot /></TribunalRoute>} />
+        <Route path="depots/:id/modifier"   element={<TribunalRoute><FormulaireDepot /></TribunalRoute>} />
 
-        {/* Modifications */}
-        <Route path="modifications"                  element={<ListeModifications />} />
-        <Route path="modifications/nouvelle"         element={<FormulaireModification />} />
-        <Route path="modifications/:id"              element={<DetailModification />} />
-        <Route path="modifications/:id/modifier"     element={<FormulaireModification />} />
-        <Route path="modifications/:id/corriger"     element={<FormulaireModification />} />
+        {/* Modifications — interdites à l'Agent GU (cohérence sidebar TRIBUNAL_ONLY) */}
+        <Route path="modifications"                  element={<TribunalRoute><ListeModifications /></TribunalRoute>} />
+        <Route path="modifications/nouvelle"         element={<TribunalRoute><FormulaireModification /></TribunalRoute>} />
+        <Route path="modifications/:id"              element={<TribunalRoute><DetailModification /></TribunalRoute>} />
+        <Route path="modifications/:id/modifier"     element={<TribunalRoute><FormulaireModification /></TribunalRoute>} />
+        <Route path="modifications/:id/corriger"     element={<TribunalRoute><FormulaireModification /></TribunalRoute>} />
 
-        {/* Radiations */}
-        <Route path="radiations"                    element={<ListeRadiations />} />
-        <Route path="radiations/nouvelle"           element={<FormulaireRadiation />} />
-        <Route path="radiations/:id"                element={<DetailRadiation />} />
+        {/* Radiations — interdites à l'Agent GU (cohérence sidebar TRIBUNAL_ONLY) */}
+        <Route path="radiations"                    element={<TribunalRoute><ListeRadiations /></TribunalRoute>} />
+        <Route path="radiations/nouvelle"           element={<TribunalRoute><FormulaireRadiation /></TribunalRoute>} />
+        <Route path="radiations/:id"                element={<TribunalRoute><DetailRadiation /></TribunalRoute>} />
 
-        {/* Cessions (parts) */}
-        <Route path="cessions"                       element={<ListeCessions />} />
-        <Route path="cessions/nouvelle"              element={<FormulaireCession />} />
-        <Route path="cessions/:id"                   element={<DetailCession />} />
-        <Route path="cessions/:id/modifier"          element={<FormulaireCession />} />
-        <Route path="cessions/:id/corriger"          element={<FormulaireCession />} />
+        {/* Cessions (parts) — interdites à l'Agent GU (cohérence sidebar TRIBUNAL_ONLY) */}
+        <Route path="cessions"                       element={<TribunalRoute><ListeCessions /></TribunalRoute>} />
+        <Route path="cessions/nouvelle"              element={<TribunalRoute><FormulaireCession /></TribunalRoute>} />
+        <Route path="cessions/:id"                   element={<TribunalRoute><DetailCession /></TribunalRoute>} />
+        <Route path="cessions/:id/modifier"          element={<TribunalRoute><FormulaireCession /></TribunalRoute>} />
+        <Route path="cessions/:id/corriger"          element={<TribunalRoute><FormulaireCession /></TribunalRoute>} />
 
-        {/* Cessions de fonds de commerce (PH) */}
-        <Route path="cessions-fonds"                      element={<ListeCessionsFonds />} />
-        <Route path="cessions-fonds/nouvelle"             element={<FormulaireCessionFonds />} />
-        <Route path="cessions-fonds/:id"                  element={<DetailCessionFonds />} />
-        <Route path="cessions-fonds/:id/modifier"         element={<FormulaireCessionFonds />} />
+        {/* Cessions de fonds de commerce (PH) — interdites à l'Agent GU */}
+        <Route path="cessions-fonds"                      element={<TribunalRoute><ListeCessionsFonds /></TribunalRoute>} />
+        <Route path="cessions-fonds/nouvelle"             element={<TribunalRoute><FormulaireCessionFonds /></TribunalRoute>} />
+        <Route path="cessions-fonds/:id"                  element={<TribunalRoute><DetailCessionFonds /></TribunalRoute>} />
+        <Route path="cessions-fonds/:id/modifier"         element={<TribunalRoute><FormulaireCessionFonds /></TribunalRoute>} />
 
         {/* Recherche & Rapports */}
         <Route path="recherche" element={<RecherchePage />} />

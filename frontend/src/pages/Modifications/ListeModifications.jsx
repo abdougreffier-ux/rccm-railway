@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Table, Button, Tag, Typography, Tooltip, Select } from 'antd';
+import { Table, Button, Tag, Typography, Tooltip, Select, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { modifAPI } from '../../api/api';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const { Title } = Typography;
 
@@ -13,6 +14,8 @@ const ListeModifications = () => {
   const [statut, setStatut] = useState('');
   const navigate            = useNavigate();
   const { t, isAr }         = useLanguage();
+  const { hasRole }         = useAuth();
+  const isGreffier          = hasRole('GREFFIER');
   const STATUT_CONFIG = {
     BROUILLON:   { color: 'default',    label: t('status.brouillon')   },
     EN_INSTANCE: { color: 'processing', label: t('status.enInstance2') },
@@ -21,7 +24,7 @@ const ListeModifications = () => {
     ANNULE:      { color: 'error',      label: t('status.annule')      },
   };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['modifications', page, statut],
     queryFn:  () => modifAPI.list({ page, statut: statut || undefined }).then(r => r.data),
     keepPreviousData: true,
@@ -50,12 +53,27 @@ const ListeModifications = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>{isAr ? 'التعديلات' : 'Modifications'}</Title>
-        <Button type="primary" icon={<PlusOutlined />}
-          onClick={() => navigate('/modifications/nouvelle')}
-          style={{ background: '#1a4480' }}>
-          Nouvelle modification
-        </Button>
+        {/* Seuls les agents du tribunal créent des modifications (le greffier valide) */}
+        {!isGreffier && (
+          <Button type="primary" icon={<PlusOutlined />}
+            onClick={() => navigate('/modifications/nouvelle')}
+            style={{ background: '#1a4480' }}>
+            {isAr ? 'قيد تعديل جديد' : 'Nouvelle modification'}
+          </Button>
+        )}
       </div>
+
+      {isError && (
+        <Alert
+          type="warning"
+          showIcon
+          message={isAr ? 'تعذّر تحميل القيود' : 'Impossible de charger les modifications'}
+          description={isAr
+            ? 'تحقق من صلاحياتك أو أعد تحميل الصفحة.'
+            : 'Vérifiez vos permissions ou rechargez la page.'}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       <div style={{ marginBottom: 16 }}>
         <Select placeholder="Filtrer par statut" value={statut || undefined}
