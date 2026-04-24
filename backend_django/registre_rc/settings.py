@@ -178,6 +178,9 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS  = config('CORS_ALLOW_ALL_ORIGINS',  default=True, cast=bool)
 CORS_ALLOWED_ORIGINS    = config('CORS_ALLOWED_ORIGINS',    default='http://localhost:3000').split(',')
 CORS_ALLOW_CREDENTIALS  = True
+# Expose Content-Disposition pour que fetch() côté navigateur puisse lire le
+# nom de fichier des PDF en contexte cross-origin (services Railway séparés).
+CORS_EXPOSE_HEADERS     = ['Content-Disposition']
 
 # ── CSRF ─────────────────────────────────────────────────────────────────────
 # Obligatoire pour accepter les requêtes non-GET depuis un domaine non-localhost.

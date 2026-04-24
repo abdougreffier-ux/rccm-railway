@@ -33,8 +33,9 @@ class MigrationGuardMiddleware:
         self.get_response = get_response
 
     # Routes publiques exemptées du garde — accessibles même si migrations en attente.
-    # /api/verifier/ doit répondre aux tiers qui scannent un QR code.
-    _EXEMPT_PATHS = ('/api/verifier/',)
+    # /api/health/   : sonde Railway + frontend — DOIT toujours retourner 200.
+    # /api/verifier/ : QR codes publics scannés par des tiers.
+    _EXEMPT_PATHS = ('/api/health/', '/api/verifier/')
 
     def __call__(self, request):
         # Vérification uniquement sur les routes API (hors routes publiques exemptées)

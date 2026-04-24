@@ -236,54 +236,37 @@ const _PDF_ERROR_MSGS = {
              ar: "خطأ تقني أثناء إنشاء الوثيقة الرسمية." },
 };
 
-// ── Cache de disponibilité backend (évite un round-trip par clic PDF) ─────────
-let _backendAvailableCache = null; // null = inconnu, true/false = résultat mis en cache
-let _backendCacheExpiry    = 0;    // timestamp d'expiration du cache (ms)
-const _BACKEND_CACHE_TTL   = 30_000; // 30 secondes
-
-/**
- * Vérifie rapidement si le backend est joignable via /api/health/.
- * Résultat mis en cache 30s pour ne pas ralentir les clics répétés.
- */
-const _checkBackendAvailable = async () => {
-  const now = Date.now();
-  if (_backendAvailableCache !== null && now < _backendCacheExpiry) {
-    return _backendAvailableCache;
-  }
-  try {
-    const ctrl = new AbortController();
-    const tid  = setTimeout(() => ctrl.abort(), 4000); // 4s max pour la sonde
-    const resp = await fetch(`${API_HOST}/api/health/`, {
-      method: 'GET',
-      signal: ctrl.signal,
-    });
-    clearTimeout(tid);
-    _backendAvailableCache = resp.ok;
-  } catch (_) {
-    _backendAvailableCache = false;
-  }
-  _backendCacheExpiry = Date.now() + _BACKEND_CACHE_TTL;
-  return _backendAvailableCache;
-};
-
-/** Invalide le cache (appelé après une erreur réseau pour forcer une nouvelle sonde) */
-export const invalidateBackendCache = () => {
-  _backendAvailableCache = null;
-  _backendCacheExpiry    = 0;
-};
-
 // ── Télécharger un PDF avec le token JWT (window.open ne transmet pas le token)
+// ─────────────────────────────────────────────────────────────────────────────
+// Architecture Railway (2 services séparés) :
+//   • REACT_APP_API_URL baked au BUILD → API_HOST = valeur ou ''
+//   • Si API_HOST = '' → URL relative → proxy Express → BACKEND_URL → Django
+//   • Si API_HOST = 'https://backend.railway.app' → URL absolue → direct Django
+//   • Les deux chemins fonctionnent — aucun fallback localhost.
+//
+// Diagnostic : ouvrir DevTools → Console, filtrer sur "[PDF]".
+// Chaque appel affiche l'URL réelle, le statut HTTP et la durée.
+// ─────────────────────────────────────────────────────────────────────────────
 export const openPDF = async (path) => {
   const token = localStorage.getItem('access_token');
   const lang  = localStorage.getItem('lang') || 'fr';
   const isAr  = lang === 'ar';
   const isRtl = isAr;
 
-  // CORRECTION CRITIQUE : ne jamais utiliser localhost en fallback.
-  // En production, API_HOST est '' → l'URL devient relative (/api/...)
-  // ce qui passe par le proxy Express (même origin, pas de CORS).
-  // En développement, API_HOST = 'http://localhost:8000' via REACT_APP_API_URL.
+  // ── Construction de l'URL — strictement identique à la logique axios ─────────
+  // path vient de rapportAPI.*() qui construit : `${BASE_URL}/rapports/...`
+  // BASE_URL = `${API_HOST}/api`
+  // → si API_HOST = ''       : path = '/api/rapports/...'  → url relative ✓
+  // → si API_HOST = 'https://x': path = 'https://x/api/...' → url absolue ✓
+  // Aucun fallback localhost : '' + '/api/...' = '/api/...' (chemin relatif valide)
   const url = path.startsWith('http') ? path : `${API_HOST}${path}`;
+
+  // ── Diagnostic console — visible dans DevTools → Console ─────────────────────
+  console.log('[PDF] ▶', {
+    API_HOST:   JSON.stringify(API_HOST),     // valeur baked au build
+    url,                                      // URL réellement appelée
+    lang,
+  });
 
   /** Affiche la notification d'erreur adaptée */
   const showError = (httpKey, serverDetail = '') => {
@@ -292,22 +275,16 @@ export const openPDF = async (path) => {
     const fallback   = isAr ? entry.ar : entry.fr;
     const titles     = _PDF_TITLES[isAr ? 'ar' : 'fr'];
     const titleText  = titles[notifType] || titles.error;
+    console.error('[PDF] ✗ erreur', httpKey, '|', serverDetail || fallback, '| url:', url);
     _showNotif({ type: notifType, title: titleText, description: serverDetail || fallback, isRtl });
   };
 
-  // ── 1. Vérification de disponibilité avant toute tentative ───────────────────
-  const available = await _checkBackendAvailable();
-  if (!available) {
-    invalidateBackendCache(); // prochaine tentative refait la sonde
-    showError('unavailable');
-    return;
-  }
-
-  // ── 2. Requête PDF avec timeout explicite ────────────────────────────────────
+  // ── Requête PDF avec timeout explicite ───────────────────────────────────────
   const controller = new AbortController();
-  // Timeout généreux : les PDF volumineux (registre chronologique, attestations avec QR)
-  // peuvent nécessiter jusqu'à 90 secondes sur Railway en phase de test.
+  // Timeout 90s : couvre les PDF volumineux sur Railway (registre chronologique,
+  // attestations avec QR code, entités avec nombreux associés).
   const timeoutId  = setTimeout(() => controller.abort(), 90_000);
+  const t0         = Date.now();
 
   try {
     const resp = await fetch(url, {
@@ -315,11 +292,9 @@ export const openPDF = async (path) => {
       signal:  controller.signal,
     });
     clearTimeout(timeoutId);
+    console.log('[PDF] HTTP', resp.status, 'en', Date.now() - t0, 'ms');
 
     if (!resp.ok) {
-      // Après une erreur serveur, invalider le cache pour forcer une nouvelle sonde
-      if (resp.status >= 500) invalidateBackendCache();
-
       let serverDetail = '';
       try {
         const json   = await resp.json();
@@ -330,14 +305,18 @@ export const openPDF = async (path) => {
       return;
     }
 
-    // Extraire le nom de fichier depuis Content-Disposition, ou dériver de l'URL
+    // Extraire le nom de fichier depuis Content-Disposition, ou dériver de l'URL.
+    // Note : en contexte cross-origin, Content-Disposition n'est exposé que si
+    // le backend inclut Access-Control-Expose-Headers: Content-Disposition.
     const disposition = resp.headers.get('Content-Disposition') || '';
-    const match       = disposition.match(/filename="?([^";\r\n]+)"?/i);
-    let filename      = match ? match[1].trim() : '';
+    const match       = disposition.match(/filename\*?="?(?:UTF-8'')?([^";\r\n]+)"?/i);
+    let filename      = match ? decodeURIComponent(match[1].trim()) : '';
     if (!filename) {
       const seg = url.split('?')[0].split('/').filter(Boolean).pop() || 'document';
       filename  = seg.endsWith('.pdf') ? seg : `${seg}.pdf`;
     }
+
+    console.log('[PDF] ✓ téléchargement :', filename, '(', Math.round((Date.now() - t0) / 100) / 10, 's)');
 
     const blob    = await resp.blob();
     const blobUrl = URL.createObjectURL(blob);
@@ -351,13 +330,14 @@ export const openPDF = async (path) => {
 
   } catch (e) {
     clearTimeout(timeoutId);
-    invalidateBackendCache();
 
     if (e.name === 'AbortError') {
-      console.warn('[PDF] Timeout dépassé (90s) :', url);
+      console.error('[PDF] ✗ timeout (>90s) :', url);
       showError('timeout');
     } else {
-      console.error('[PDF] Erreur réseau :', e.message, url);
+      // Erreur réseau pure : connexion refusée, DNS, CORS preflight bloqué.
+      // Causes Railway : proxy Express sans BACKEND_URL, backend non démarré.
+      console.error('[PDF] ✗ erreur réseau :', e.name, e.message, '| url:', url, '| API_HOST:', JSON.stringify(API_HOST));
       showError('network');
     }
   }
