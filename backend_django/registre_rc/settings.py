@@ -223,6 +223,11 @@ LOGGING = {
             'format': '[RCCM] {levelname} {asctime} [{name}] {message}',
             'style':  '{',
         },
+        'pdf_audit': {
+            # Format minimal pour le journal PDF — le JSON est dans le message
+            'format': '{asctime} {message}',
+            'style':  '{',
+        },
     },
     'handlers': {
         'console': {
@@ -244,6 +249,16 @@ LOGGING = {
             'backupCount': 10,
             'formatter':   'rccm',
         },
+        'file_pdf_audit': {
+            # Journal d'audit des générations PDF — chaque ligne = 1 JSON [PDF_AUDIT]
+            # Sur Railway ce fichier n'est pas persistant entre les redémarrages ;
+            # les entrées sont également émises sur console (capturées dans les logs Railway).
+            'class':       'logging.handlers.RotatingFileHandler',
+            'filename':    BASE_DIR / 'logs' / 'pdf_audit.log',
+            'maxBytes':    20 * 1024 * 1024,
+            'backupCount': 10,
+            'formatter':   'pdf_audit',
+        },
     },
     'root': {'handlers': ['console'], 'level': 'INFO'},
     'loggers': {
@@ -263,6 +278,15 @@ LOGGING = {
             'handlers':  ['console', 'file_rccm'],
             'level':     'DEBUG',
             'propagate': False,
+        },
+        # ── Journal d'audit PDF ───────────────────────────────────────────────
+        # Toute tentative de génération de document officiel est tracée ici.
+        # Format : [PDF_AUDIT] <JSON> — chaque ligne contient utilisateur, acte,
+        # référence, langue, succès, durée, timestamp.
+        'rccm.pdf_audit': {
+            'handlers':  ['console', 'file_pdf_audit'],
+            'level':     'INFO',
+            'propagate': False,   # ne pas doubler dans rccm.log
         },
     },
 }

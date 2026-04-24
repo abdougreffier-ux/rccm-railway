@@ -2,12 +2,33 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
+from django.utils import timezone as _tz
 from rest_framework_simplejwt.views import TokenRefreshView
 from apps.utilisateurs.views import CustomTokenObtainPairView, LogoutView, MeView, ChangePasswordView
 from apps.rapports.verification import VerificationPubliqueView
 
+
+def health_view(request):
+    """
+    Sonde de disponibilité Railway — GET /api/health/
+    Sans authentification. Sans requête DB. Répond en < 50 ms.
+    Utilisée par :
+      - Railway healthcheckPath (empêche le routage avant que Django soit prêt)
+      - openPDF() côté frontend (vérifie la disponibilité avant toute génération)
+    """
+    return JsonResponse({
+        'status':    'ok',
+        'service':   'RCCM-RCCM',
+        'timestamp': _tz.now().isoformat(),
+    })
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # ── Sonde de disponibilité (sans auth — Railway healthcheck + frontend guard) ──
+    path('api/health/', health_view, name='health'),
 
     # ── Vérification publique RCCM (sans authentification — accessible via QR code) ──
     # GET /api/verifier/?ref=<reference>&type=<type>

@@ -35,6 +35,7 @@ from apps.rapports.views import (
     _header_table, _signature_block, _make_doc, _get_signataire,
     _build_info_table, _ar_style, COLORS, _ARABIC_FONT, ar, _civ,
     _make_qr_footer_callback, _qr_text,
+    PdfAuditMixin,
 )
 
 from apps.core.permissions import EstGreffier, EstAgentTribunalOuGreffier
@@ -559,7 +560,8 @@ class CertificatDetailView(APIView):
         return Response(CertificatGreffierSerializer(cert).data)
 
 
-class CertificatPDFView(APIView):
+class CertificatPDFView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'certificat-declaratif'
     """GET /certificats/<pk>/pdf/?lang=fr|ar — télécharge le PDF du certificat."""
     permission_classes = [EstAgentTribunalOuGreffier]
 

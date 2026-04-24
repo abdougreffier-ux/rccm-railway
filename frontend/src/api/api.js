@@ -214,14 +214,62 @@ const _PDF_ERROR_MSGS = {
              fr: "Impossible de générer ce document (données ou statut invalides).",
              ar: "تعذّر إنشاء المستند (بيانات أو حالة غير صالحة)." },
   500:     { type: 'error',
-             fr: "Erreur interne du serveur. Contactez l'administrateur.",
-             ar: "خطأ داخلي في الخادم. تواصل مع المسؤول." },
+             fr: "Erreur interne du serveur lors de la génération. Veuillez réessayer ou contacter l'administrateur.",
+             ar: "خطأ داخلي في الخادم أثناء الإنشاء. يرجى إعادة المحاولة أو التواصل مع المسؤول." },
+  502:     { type: 'error',
+             fr: "Le service de génération des actes est momentanément indisponible. Veuillez patienter quelques instants et réessayer.",
+             ar: "خدمة إصدار الوثائق غير متاحة حالياً. يرجى الانتظار لحظات ثم إعادة المحاولة." },
+  503:     { type: 'error',
+             fr: "Le service est en cours de démarrage. Veuillez patienter quelques instants et réessayer.",
+             ar: "الخدمة في طور الإقلاع. يرجى الانتظار لحظات ثم إعادة المحاولة." },
+  timeout: { type: 'error',
+             fr: "La génération du document a dépassé le délai autorisé. Le dossier est peut-être volumineux — réessayez dans quelques instants.",
+             ar: "تجاوزت مدة إنشاء الوثيقة الحد المسموح به. الملف قد يكون ضخماً — أعد المحاولة بعد لحظات." },
+  unavailable: { type: 'error',
+             fr: "Le service de génération des actes est momentanément indisponible. Veuillez réessayer dans quelques instants ou contacter le responsable technique si le problème persiste.",
+             ar: "خدمة إصدار الوثائق الرسمية غير متاحة مؤقتاً. يرجى إعادة المحاولة بعد قليل، أو التواصل مع المسؤول التقني إذا استمرت المشكلة." },
   network: { type: 'error',
-             fr: "Impossible de joindre le serveur. Vérifiez que le backend est démarré.",
-             ar: "تعذّر الاتصال بالخادم. تأكد من تشغيل الخدمة." },
+             fr: "Le service de génération des actes est momentanément indisponible. Veuillez réessayer dans quelques instants ou contacter le responsable technique si le problème persiste.",
+             ar: "خدمة إصدار الوثائق الرسمية غير متاحة مؤقتاً. يرجى إعادة المحاولة بعد قليل، أو التواصل مع المسؤول التقني إذا استمرت المشكلة." },
   default: { type: 'error',
-             fr: "Erreur technique lors de la génération du PDF.",
-             ar: "خطأ تقني أثناء إنشاء الملف." },
+             fr: "Erreur technique lors de la génération du document officiel.",
+             ar: "خطأ تقني أثناء إنشاء الوثيقة الرسمية." },
+};
+
+// ── Cache de disponibilité backend (évite un round-trip par clic PDF) ─────────
+let _backendAvailableCache = null; // null = inconnu, true/false = résultat mis en cache
+let _backendCacheExpiry    = 0;    // timestamp d'expiration du cache (ms)
+const _BACKEND_CACHE_TTL   = 30_000; // 30 secondes
+
+/**
+ * Vérifie rapidement si le backend est joignable via /api/health/.
+ * Résultat mis en cache 30s pour ne pas ralentir les clics répétés.
+ */
+const _checkBackendAvailable = async () => {
+  const now = Date.now();
+  if (_backendAvailableCache !== null && now < _backendCacheExpiry) {
+    return _backendAvailableCache;
+  }
+  try {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 4000); // 4s max pour la sonde
+    const resp = await fetch(`${API_HOST}/api/health/`, {
+      method: 'GET',
+      signal: ctrl.signal,
+    });
+    clearTimeout(tid);
+    _backendAvailableCache = resp.ok;
+  } catch (_) {
+    _backendAvailableCache = false;
+  }
+  _backendCacheExpiry = Date.now() + _BACKEND_CACHE_TTL;
+  return _backendAvailableCache;
+};
+
+/** Invalide le cache (appelé après une erreur réseau pour forcer une nouvelle sonde) */
+export const invalidateBackendCache = () => {
+  _backendAvailableCache = null;
+  _backendCacheExpiry    = 0;
 };
 
 // ── Télécharger un PDF avec le token JWT (window.open ne transmet pas le token)
@@ -230,7 +278,12 @@ export const openPDF = async (path) => {
   const lang  = localStorage.getItem('lang') || 'fr';
   const isAr  = lang === 'ar';
   const isRtl = isAr;
-  const url   = path.startsWith('http') ? path : `${API_HOST || 'http://localhost:8000'}${path}`;
+
+  // CORRECTION CRITIQUE : ne jamais utiliser localhost en fallback.
+  // En production, API_HOST est '' → l'URL devient relative (/api/...)
+  // ce qui passe par le proxy Express (même origin, pas de CORS).
+  // En développement, API_HOST = 'http://localhost:8000' via REACT_APP_API_URL.
+  const url = path.startsWith('http') ? path : `${API_HOST}${path}`;
 
   /** Affiche la notification d'erreur adaptée */
   const showError = (httpKey, serverDetail = '') => {
@@ -239,21 +292,39 @@ export const openPDF = async (path) => {
     const fallback   = isAr ? entry.ar : entry.fr;
     const titles     = _PDF_TITLES[isAr ? 'ar' : 'fr'];
     const titleText  = titles[notifType] || titles.error;
-    // Le message serveur est prioritaire sur le fallback générique
     _showNotif({ type: notifType, title: titleText, description: serverDetail || fallback, isRtl });
   };
+
+  // ── 1. Vérification de disponibilité avant toute tentative ───────────────────
+  const available = await _checkBackendAvailable();
+  if (!available) {
+    invalidateBackendCache(); // prochaine tentative refait la sonde
+    showError('unavailable');
+    return;
+  }
+
+  // ── 2. Requête PDF avec timeout explicite ────────────────────────────────────
+  const controller = new AbortController();
+  // Timeout généreux : les PDF volumineux (registre chronologique, attestations avec QR)
+  // peuvent nécessiter jusqu'à 90 secondes sur Railway en phase de test.
+  const timeoutId  = setTimeout(() => controller.abort(), 90_000);
 
   try {
     const resp = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
+      signal:  controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!resp.ok) {
+      // Après une erreur serveur, invalider le cache pour forcer une nouvelle sonde
+      if (resp.status >= 500) invalidateBackendCache();
+
       let serverDetail = '';
       try {
         const json   = await resp.json();
         serverDetail = (isAr ? (json.detail_ar || json.detail) : json.detail) || '';
-      } catch (_) { /* réponse non-JSON */ }
+      } catch (_) { /* réponse non-JSON (ex. page HTML d'erreur proxy) */ }
 
       showError(resp.status, serverDetail);
       return;
@@ -276,12 +347,19 @@ export const openPDF = async (path) => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
 
   } catch (e) {
-    // Erreur réseau (backend non démarré, CORS, timeout…)
-    console.error('Erreur PDF:', e);
-    showError('network');
+    clearTimeout(timeoutId);
+    invalidateBackendCache();
+
+    if (e.name === 'AbortError') {
+      console.warn('[PDF] Timeout dépassé (90s) :', url);
+      showError('timeout');
+    } else {
+      console.error('[PDF] Erreur réseau :', e.message, url);
+      showError('network');
+    }
   }
 };
 

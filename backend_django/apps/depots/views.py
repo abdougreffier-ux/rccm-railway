@@ -8,6 +8,7 @@ from rest_framework.generics import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Depot
 from apps.core.permissions import EstAgentTribunalOuGreffier, EstGreffier, filtrer_par_auteur
+from apps.rapports.views import PdfAuditMixin
 
 
 # ─── Serializer ───────────────────────────────────────────────────────────────
@@ -92,7 +93,8 @@ class DepotDetail(generics.RetrieveUpdateAPIView):
 
 # ─── Certificat de dépôt (PDF) ────────────────────────────────────────────────
 
-class CertificatDepotView(APIView):
+class CertificatDepotView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'certificat-depot'
     """Certificat de dépôt PDF — impression réservée au greffier (CDC §5)."""
     permission_classes = [EstGreffier]
 

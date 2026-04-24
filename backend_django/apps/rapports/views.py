@@ -1,5 +1,7 @@
 import io
 import os
+import time
+import logging
 import json as _json
 from datetime import date
 from django.http import HttpResponse
@@ -27,6 +29,77 @@ from apps.core.permissions import (
     est_greffier,
 )
 from django.utils import timezone as _tz
+
+# ── Journal des générations PDF ───────────────────────────────────────────────
+# Chaque tentative de génération (succès ou échec) est tracée dans les logs
+# Railway sous le tag [PDF_AUDIT]. Format JSON structuré pour faciliter
+# l'extraction et l'audit dans le cadre d'un registre officiel.
+_pdf_log = logging.getLogger('rccm.pdf_audit')
+
+
+def _log_pdf(*, user, acte, reference, langue, succes, duree_ms, erreur=''):
+    """
+    Journalise une tentative de génération de document officiel.
+
+    Paramètres :
+        user       — login de l'utilisateur (str)
+        acte       — type d'acte (ex. 'attestation-immatriculation', 'extrait-rc')
+        reference  — référence du dossier (ex. 'RA-2025-0001')
+        langue     — 'fr' ou 'ar'
+        succes     — True si le PDF a été généré, False sinon
+        duree_ms   — durée de génération en millisecondes
+        erreur     — message d'erreur si succes=False
+    """
+    _pdf_log.info(
+        '[PDF_AUDIT] %s',
+        _json.dumps({
+            'utilisateur': str(user),
+            'acte':        acte,
+            'reference':   str(reference),
+            'langue':      langue,
+            'succes':      succes,
+            'duree_ms':    round(duree_ms),
+            'timestamp':   _tz.now().isoformat(),
+            'erreur':      erreur,
+        }, ensure_ascii=False),
+    )
+
+
+class PdfAuditMixin:
+    """
+    Mixin de journalisation pour toutes les vues de génération de documents officiels.
+
+    Toute tentative (succès ou échec) est tracée dans les logs Railway sous le
+    tag [PDF_AUDIT] au format JSON structuré. Chaque entrée contient :
+      utilisateur, acte, référence dossier, langue, succès/échec, durée, timestamp.
+
+    Usage :
+        class MaVuePDF(PdfAuditMixin, APIView):
+            _pdf_acte_name = 'nom-du-type-acte'  # libellé court
+    """
+    _pdf_acte_name = ''  # à surcharger dans chaque sous-classe
+
+    def dispatch(self, request, *args, **kwargs):
+        t0 = time.monotonic()
+        response = super().dispatch(request, *args, **kwargs)
+        duree_ms = (time.monotonic() - t0) * 1000
+
+        # Extraire l'ID de dossier depuis les kwargs URL (ra_id, rc_id, rbe_id, etc.)
+        ref = next((str(v) for v in kwargs.values() if v is not None), '?')
+        lang = request.query_params.get('lang', 'fr')
+        status_code = getattr(response, 'status_code', 0)
+        succes = (status_code == 200)
+
+        _log_pdf(
+            user=getattr(request.user, 'login', str(request.user)),
+            acte=self._pdf_acte_name or self.__class__.__name__,
+            reference=ref,
+            langue=lang,
+            succes=succes,
+            duree_ms=duree_ms,
+            erreur='' if succes else f'HTTP {status_code}',
+        )
+        return response
 
 # ── Support QR code ───────────────────────────────────────────────────────────
 try:
@@ -1596,7 +1669,8 @@ class StatistiquesView(APIView):
 
 # ── Certificat d'enregistrement au registre chronologique ─────────────────────
 
-class CertificatChronologiqueView(APIView):
+class CertificatChronologiqueView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'certificat-chronologique'
     """
     ETAT_Certificat_Chronologique
     Génère un certificat officiel pour un enregistrement au registre chronologique.
@@ -2068,7 +2142,8 @@ def _get_langue_acte_from_ra(ra, fallback='fr'):
     return fallback if fallback in ('fr', 'ar') else 'fr'
 
 
-class AttestationImmatriculationView(APIView):
+class AttestationImmatriculationView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'attestation-immatriculation'
     """
     ETAT_Extrait_Analytique — version simple (attestation one-page).
     Greffier : toujours autorisé.
@@ -2218,7 +2293,8 @@ class AttestationImmatriculationView(APIView):
             headers={'Content-Disposition': f'attachment; filename="{filename}"'})
 
 
-class ExtraitRCView(APIView):
+class ExtraitRCView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'extrait-rc'
     """
     ETAT_Extrait_Analytique — extrait complet avec gérants, associés, domaines.
     Greffier : toujours autorisé.
@@ -2650,7 +2726,8 @@ class ExtraitRCView(APIView):
 
 # ── Registre chronologique (liste PDF) ────────────────────────────────────────
 
-class RegistreChronologiquePDFView(APIView):
+class RegistreChronologiquePDFView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'registre-chronologique'
     """Registre chronologique PDF — réservé au greffier (CDC §5)."""
     permission_classes = [EstGreffier]
 
@@ -2706,7 +2783,8 @@ class RegistreChronologiquePDFView(APIView):
 
 # ── Vues RBE (Registre des Bénéficiaires Effectifs) ───────────────────────────
 
-class AttestationRBEView(APIView):
+class AttestationRBEView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'attestation-rbe'
     """Attestation d'inscription au Registre des Bénéficiaires Effectifs.
     Impression réservée au greffier (CDC §5)."""
     permission_classes = [EstGreffier]
@@ -2821,7 +2899,8 @@ class AttestationRBEView(APIView):
             headers={'Content-Disposition': f'attachment; filename="{filename}"'})
 
 
-class ExtraitRBEView(APIView):
+class ExtraitRBEView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'extrait-rbe'
     """Extrait complet du dossier RBE avec liste des bénéficiaires.
     Impression réservée au greffier (CDC §5)."""
     permission_classes = [EstGreffier]
@@ -2972,7 +3051,8 @@ class ExtraitRBEView(APIView):
 
 # ── Certificat de radiation ────────────────────────────────────────────────────
 
-class CertificatRadiationView(APIView):
+class CertificatRadiationView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'certificat-radiation'
     """GET /rapports/certificat-radiation/<rad_id>/
     Impression réservée au greffier (CDC §5)."""
     permission_classes = [EstGreffier]
@@ -3134,7 +3214,8 @@ class CertificatRadiationView(APIView):
 
 # ── Certificat d'inscription modificative ─────────────────────────────────────
 
-class CertificatModificationView(APIView):
+class CertificatModificationView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'certificat-modification'
     """GET /rapports/certificat-modification/<modif_id>/?lang=fr|ar
     Certificat d'inscription modificative au registre du commerce.
     Disponible après validation (statut VALIDE).
@@ -3522,7 +3603,8 @@ class CertificatModificationView(APIView):
 
 # ── Certificat de cession de parts sociales ──────────────────────────────────
 
-class CertificatCessionPartsView(APIView):
+class CertificatCessionPartsView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'certificat-cession-parts'
     """GET /rapports/certificat-cession-parts/<ces_id>/?lang=fr|ar
     Certificat de cession de parts sociales / d'actions.
     Disponible uniquement après validation (statut VALIDE).
@@ -4105,7 +4187,8 @@ class CertificatCessionPartsView(APIView):
 
 # ── Certificat de cession de fonds de commerce ────────────────────────────────
 
-class CertificatCessionFondsView(APIView):
+class CertificatCessionFondsView(PdfAuditMixin, APIView):
+    _pdf_acte_name = 'certificat-cession-fonds'
     """GET /rapports/certificat-cession-fonds/<cf_id>/?lang=fr|ar
     Certificat de cession d'entreprise (fonds de commerce).
     Disponible uniquement après validation (statut VALIDE).
