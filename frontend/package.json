@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
+    "@fontsource/cairo": "^5.0.8",
     "@ant-design/icons": "^5.3.0",
     "@ant-design/plots": "^2.1.0",
     "antd": "^5.13.0",

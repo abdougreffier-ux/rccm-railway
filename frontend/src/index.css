@@ -23,14 +23,24 @@ body {
 .statut-RADIE           { color: #d32f2f; }
 .statut-EN_COURS        { color: #ed6c02; }
 
-/* RTL — Police arabe */
+/* RTL — Police arabe (Cairo embarquée localement via @fontsource) */
+[dir="rtl"],
 [dir="rtl"] body,
+[dir="rtl"] *,
 [dir="rtl"] .ant-typography,
 [dir="rtl"] .ant-btn,
 [dir="rtl"] .ant-menu-title-content,
 [dir="rtl"] .ant-table,
-[dir="rtl"] .ant-form-item-label {
-  font-family: 'Cairo', 'Roboto', sans-serif;
+[dir="rtl"] .ant-form-item-label,
+[dir="rtl"] .ant-select-selector,
+[dir="rtl"] .ant-input,
+[dir="rtl"] .ant-tag {
+  font-family: 'Cairo', 'Roboto', sans-serif !important;
+}
+
+/* Assurer Cairo sur tout texte arabe, même hors RTL */
+:lang(ar) {
+  font-family: 'Cairo', sans-serif;
 }
 
 /* Cellules RTL dans les tableaux */

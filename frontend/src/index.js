@@ -10,6 +10,10 @@ import 'dayjs/locale/fr';
 import 'dayjs/locale/ar';
 import App from './App';
 import './index.css';
+// Police Cairo embarquée localement (pas de dépendance CDN → arabe garanti)
+import '@fontsource/cairo/400.css';
+import '@fontsource/cairo/600.css';
+import '@fontsource/cairo/700.css';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 
 dayjs.locale('fr');
@@ -23,15 +27,12 @@ const queryClient = new QueryClient({
   },
 });
 
-const theme = {
-  token: {
-    colorPrimary:   '#1a4480',
-    colorSuccess:   '#2e7d32',
-    colorWarning:   '#ed6c02',
-    colorError:     '#d32f2f',
-    borderRadius:   6,
-    fontFamily:     "'Roboto', 'Cairo', sans-serif",
-  },
+const BASE_THEME = {
+  colorPrimary:   '#1a4480',
+  colorSuccess:   '#2e7d32',
+  colorWarning:   '#ed6c02',
+  colorError:     '#d32f2f',
+  borderRadius:   6,
 };
 
 // Wrapper interne pour accéder à useLanguage dans ConfigProvider
@@ -41,6 +42,16 @@ const LocalizedApp = () => {
   React.useEffect(() => {
     dayjs.locale(lang);
   }, [lang]);
+
+  // En mode arabe, Cairo en tête → glyphes arabes garantis même si Roboto est chargé
+  const theme = {
+    token: {
+      ...BASE_THEME,
+      fontFamily: isAr
+        ? "'Cairo', 'Roboto', sans-serif"
+        : "'Roboto', 'Cairo', sans-serif",
+    },
+  };
 
   return (
     <ConfigProvider
