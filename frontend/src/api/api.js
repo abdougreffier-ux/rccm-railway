@@ -238,6 +238,11 @@ const _PDF_ERROR_MSGS = {
 
 // ── Télécharger un PDF avec le token JWT (window.open ne transmet pas le token)
 // ─────────────────────────────────────────────────────────────────────────────
+// Implémenté avec axios (responseType: 'blob') pour être cohérent avec tous les
+// autres appels API et bénéficier de la gestion d'erreur axios (e.response,
+// e.code, etc.) plutôt que du comportement variable de fetch() (TypeError vs
+// réponse HTTP selon la version du proxy).
+//
 // Architecture Railway (2 services séparés) :
 //   • REACT_APP_API_URL baked au BUILD → API_HOST = valeur ou ''
 //   • Si API_HOST = '' → URL relative → proxy Express → BACKEND_URL → Django
@@ -256,21 +261,21 @@ export const openPDF = async (path) => {
   // ── Construction de l'URL — strictement identique à la logique axios ─────────
   // path vient de rapportAPI.*() qui construit : `${BASE_URL}/rapports/...`
   // BASE_URL = `${API_HOST}/api`
-  // → si API_HOST = ''       : path = '/api/rapports/...'  → url relative ✓
-  // → si API_HOST = 'https://x': path = 'https://x/api/...' → url absolue ✓
+  // → si API_HOST = ''         : path = '/api/rapports/...'    → url relative ✓
+  // → si API_HOST = 'https://x': path = 'https://x/api/...'   → url absolue ✓
   // Aucun fallback localhost : '' + '/api/...' = '/api/...' (chemin relatif valide)
   const url = path.startsWith('http') ? path : `${API_HOST}${path}`;
 
   // ── Diagnostic console — visible dans DevTools → Console ─────────────────────
   console.log('[PDF] ▶', {
-    API_HOST:   JSON.stringify(API_HOST),     // valeur baked au build
-    url,                                      // URL réellement appelée
+    API_HOST: JSON.stringify(API_HOST),   // valeur baked au build
+    url,                                  // URL réellement appelée
     lang,
   });
 
   /** Affiche la notification d'erreur adaptée */
   const showError = (httpKey, serverDetail = '') => {
-    const entry   = _PDF_ERROR_MSGS[httpKey] || _PDF_ERROR_MSGS.default;
+    const entry      = _PDF_ERROR_MSGS[httpKey] || _PDF_ERROR_MSGS.default;
     const notifType  = entry.type;
     const fallback   = isAr ? entry.ar : entry.fr;
     const titles     = _PDF_TITLES[isAr ? 'ar' : 'fr'];
@@ -279,36 +284,27 @@ export const openPDF = async (path) => {
     _showNotif({ type: notifType, title: titleText, description: serverDetail || fallback, isRtl });
   };
 
-  // ── Requête PDF avec timeout explicite ───────────────────────────────────────
-  const controller = new AbortController();
-  // Timeout 90s : couvre les PDF volumineux sur Railway (registre chronologique,
-  // attestations avec QR code, entités avec nombreux associés).
-  const timeoutId  = setTimeout(() => controller.abort(), 90_000);
-  const t0         = Date.now();
+  // ── Requête PDF via axios (responseType: 'blob') ──────────────────────────────
+  // axios lève e.response en cas d'erreur HTTP (au lieu de la TypeError de fetch)
+  // et e.code === 'ECONNABORTED' pour les timeouts — comportement fiable et
+  // identique quel que soit le chemin proxy/direct.
+  const t0 = Date.now();
 
   try {
-    const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal:  controller.signal,
+    const resp = await axios.get(url, {
+      responseType: 'blob',
+      // Timeout 90s : couvre les PDF volumineux sur Railway (registre
+      // chronologique, attestations avec QR code, entités avec nombreux associés).
+      timeout:  90_000,
+      headers:  { Authorization: `Bearer ${token}` },
     });
-    clearTimeout(timeoutId);
-    console.log('[PDF] HTTP', resp.status, 'en', Date.now() - t0, 'ms');
 
-    if (!resp.ok) {
-      let serverDetail = '';
-      try {
-        const json   = await resp.json();
-        serverDetail = (isAr ? (json.detail_ar || json.detail) : json.detail) || '';
-      } catch (_) { /* réponse non-JSON (ex. page HTML d'erreur proxy) */ }
-
-      showError(resp.status, serverDetail);
-      return;
-    }
+    console.log('[PDF] HTTP 200 en', Date.now() - t0, 'ms');
 
     // Extraire le nom de fichier depuis Content-Disposition, ou dériver de l'URL.
     // Note : en contexte cross-origin, Content-Disposition n'est exposé que si
     // le backend inclut Access-Control-Expose-Headers: Content-Disposition.
-    const disposition = resp.headers.get('Content-Disposition') || '';
+    const disposition = resp.headers['content-disposition'] || '';
     const match       = disposition.match(/filename\*?="?(?:UTF-8'')?([^";\r\n]+)"?/i);
     let filename      = match ? decodeURIComponent(match[1].trim()) : '';
     if (!filename) {
@@ -318,8 +314,8 @@ export const openPDF = async (path) => {
 
     console.log('[PDF] ✓ téléchargement :', filename, '(', Math.round((Date.now() - t0) / 100) / 10, 's)');
 
-    const blob    = await resp.blob();
-    const blobUrl = URL.createObjectURL(blob);
+    // resp.data est déjà un Blob (responseType: 'blob')
+    const blobUrl = URL.createObjectURL(resp.data);
     const a       = document.createElement('a');
     a.href        = blobUrl;
     a.download    = filename;
@@ -329,15 +325,28 @@ export const openPDF = async (path) => {
     setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
 
   } catch (e) {
-    clearTimeout(timeoutId);
+    const elapsed = Date.now() - t0;
 
-    if (e.name === 'AbortError') {
-      console.error('[PDF] ✗ timeout (>90s) :', url);
+    if (e.code === 'ECONNABORTED') {
+      // Timeout axios (timeout: 90_000 dépassé)
+      console.error('[PDF] ✗ timeout (>90s) :', url, '— durée :', elapsed, 'ms');
       showError('timeout');
+    } else if (e.response) {
+      // Réponse HTTP reçue avec statut d'erreur (4xx / 5xx)
+      console.log('[PDF] HTTP', e.response.status, 'en', elapsed, 'ms');
+      let serverDetail = '';
+      try {
+        // Avec responseType: 'blob', e.response.data est un Blob — il faut le lire.
+        const text = await e.response.data.text();
+        const json = JSON.parse(text);
+        serverDetail = (isAr ? (json.detail_ar || json.detail) : json.detail) || '';
+      } catch (_) { /* réponse non-JSON (ex. page HTML d'erreur proxy) */ }
+      showError(e.response.status, serverDetail);
     } else {
       // Erreur réseau pure : connexion refusée, DNS, CORS preflight bloqué.
       // Causes Railway : proxy Express sans BACKEND_URL, backend non démarré.
-      console.error('[PDF] ✗ erreur réseau :', e.name, e.message, '| url:', url, '| API_HOST:', JSON.stringify(API_HOST));
+      console.error('[PDF] ✗ erreur réseau :', e.name, e.message,
+        '| url:', url, '| API_HOST:', JSON.stringify(API_HOST));
       showError('network');
     }
   }
@@ -724,7 +733,7 @@ export const viewDocument = async (path) => {
   const token = localStorage.getItem('access_token');
   const lang  = localStorage.getItem('lang') || 'fr';
   const isAr  = lang === 'ar';
-  const url   = path.startsWith('http') ? path : `${API_HOST || 'http://localhost:8000'}${path}`;
+  const url   = path.startsWith('http') ? path : `${API_HOST}${path}`;
 
   // Ouvrir la fenêtre cible immédiatement (événement utilisateur synchrone)
   // pour éviter que le bloqueur de pop-ups ne l'intercepte.

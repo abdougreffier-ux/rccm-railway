@@ -25,6 +25,10 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 console.log(`[RCCM] Proxy backend → ${BACKEND_URL}`);
 
 // ── Proxy /api/* → backend Django ─────────────────────────────────────────────
+// NOTE : http-proxy-middleware v2.x utilise onError/onProxyRes/onProxyReq comme
+// options de premier niveau. La syntaxe `on: { error: ... }` est celle de v3+
+// et est silencieusement ignorée par v2 — ce qui provoquait un reset de connexion
+// côté navigateur (fetch() lançait une TypeError au lieu de recevoir un HTTP 502).
 app.use(
   '/api',
   createProxyMiddleware({
@@ -33,23 +37,20 @@ app.use(
     // 120s : couvre les PDF volumineux (registre chronologique complet, etc.)
     proxyTimeout: 120_000,
     timeout:      120_000,
-    on: {
-      error: (err, req, res) => {
-        const isPdfPath = req.path && req.path.includes('/rapports/');
-        console.error(`[proxy] erreur sur ${req.method} ${req.path} :`, err.message);
-        // Réponse JSON structurée — le frontend React l'interprète comme un 502
-        if (res && !res.headersSent) {
-          res.status(502).json({
-            detail:    'Le service de génération des actes est momentanément indisponible.',
-            detail_ar: 'خدمة إصدار الوثائق الرسمية غير متاحة مؤقتاً.',
-            code:      'BACKEND_UNAVAILABLE',
-            path:      req.path,
-          });
-        }
-      },
-      proxyReqError: (err, req, res) => {
-        console.error(`[proxy] erreur de connexion vers ${BACKEND_URL}${req.path} :`, err.code, err.message);
-      },
+    // ── Syntaxe v2 correcte ──────────────────────────────────────────────────
+    onError: (err, req, res) => {
+      console.error(
+        `[proxy] erreur ${err.code || ''} sur ${req.method} ${req.path}`
+        + ` → ${BACKEND_URL} : ${err.message}`
+      );
+      if (res && !res.headersSent) {
+        res.status(502).json({
+          detail:    'Le service de génération des actes est momentanément indisponible.',
+          detail_ar: 'خدمة إصدار الوثائق الرسمية غير متاحة مؤقتاً.',
+          code:      'BACKEND_UNAVAILABLE',
+          path:      req.path,
+        });
+      }
     },
   })
 );
