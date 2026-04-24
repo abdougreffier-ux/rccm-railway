@@ -57,12 +57,15 @@ const PrivateRoute = ({ children }) => {
   return user ? children : <Navigate to="/login" replace />;
 };
 
-/** Route réservée au greffier — redirige vers "/" si l'utilisateur est un agent. */
+/** Route réservée au greffier — redirige vers la page de travail du rôle si l'utilisateur n'est pas greffier. */
 const GreffierRoute = ({ children }) => {
   const { user, loading, hasRole } = useAuth();
   if (loading) return <div style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'100vh' }}><Spin size="large" /></div>;
   if (!user) return <Navigate to="/login" replace />;
-  return hasRole('GREFFIER') ? children : <Navigate to="/" replace />;
+  if (hasRole('GREFFIER')) return children;
+  // AGENT_TRIBUNAL → ses modifications ; AGENT_GU → RC chronologique
+  if (hasRole('AGENT_TRIBUNAL')) return <Navigate to="/modifications" replace />;
+  return <Navigate to="/registres/chronologique" replace />;
 };
 
 /** Route interdite à l'Agent GU — réservée au greffier et à l'agent tribunal. */

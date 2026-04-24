@@ -1,34 +1,87 @@
 import React from 'react';
-import { Row, Col, Card, Statistic, Typography, Spin, Tag, Table, Button } from 'antd';
+import { Row, Col, Card, Statistic, Typography, Spin, Tag, Table, Button, Space } from 'antd';
+import {
+  EditOutlined, CloseCircleOutlined, InboxOutlined, SwapOutlined,
+  ShopOutlined, FileTextOutlined, CheckCircleOutlined, ClockCircleOutlined, PlusOutlined,
+} from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { rapportAPI, demandeAPI } from '../../api/api';
-import {
-  FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  ClockCircleOutlined, PlusOutlined
-} from '@ant-design/icons';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useAuth } from '../../contexts/AuthContext';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
+
+/** Page d'accueil simplifiée pour l'agent du tribunal (pas de stats greffier). */
+const AgentDashboard = () => {
+  const navigate = useNavigate();
+  const { t, isAr } = useLanguage();
+
+  const MODULES = [
+    { key: 'modifications',  icon: <EditOutlined style={{ fontSize: 28 }} />,         color: '#1a4480', label: isAr ? 'قيود التعديل'           : 'Modifications',           path: '/modifications'  },
+    { key: 'depots',         icon: <InboxOutlined style={{ fontSize: 28 }} />,         color: '#2e7d32', label: isAr ? 'الإيداعات'               : 'Dépôts',                  path: '/depots'         },
+    { key: 'radiations',     icon: <CloseCircleOutlined style={{ fontSize: 28 }} />,   color: '#d32f2f', label: isAr ? 'قيود الشطب'             : 'Radiations',              path: '/radiations'     },
+    { key: 'cessions',       icon: <SwapOutlined style={{ fontSize: 28 }} />,          color: '#7b1fa2', label: isAr ? 'تنازلات الحصص'          : 'Cessions de parts',       path: '/cessions'       },
+    { key: 'cessions-fonds', icon: <ShopOutlined style={{ fontSize: 28 }} />,          color: '#e65100', label: isAr ? 'تنازلات المحلات'        : 'Cessions de fonds',       path: '/cessions-fonds' },
+    { key: 'demandes',       icon: <FileTextOutlined style={{ fontSize: 28 }} />,     color: '#0277bd', label: isAr ? 'الطلبات'                : 'Demandes',                path: '/demandes'       },
+  ];
+
+  return (
+    <div>
+      <div style={{ marginBottom: 24 }}>
+        <Title level={4} style={{ margin: 0 }}>🏛️ {t('nav.dashboard')}</Title>
+        <Text type="secondary">
+          {isAr ? 'مرحباً — اختر الوحدة التي تريد العمل عليها.' : 'Bienvenue — sélectionnez le module sur lequel travailler.'}
+        </Text>
+      </div>
+      <Row gutter={[16, 16]}>
+        {MODULES.map(m => (
+          <Col key={m.key} xs={24} sm={12} lg={8}>
+            <Card
+              hoverable
+              style={{ borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', cursor: 'pointer' }}
+              onClick={() => navigate(m.path)}
+            >
+              <Space>
+                <span style={{ color: m.color }}>{m.icon}</span>
+                <Text strong style={{ fontSize: 15 }}>{m.label}</Text>
+              </Space>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+    </div>
+  );
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { hasRole } = useAuth();
+  const isGreffier = hasRole('GREFFIER');
 
+  // Les statistiques générales sont réservées au greffier (CDC §3.2)
+  // Ne pas déclencher la requête pour éviter un 403 + spinner bloquant pour les agents
   const { data: tdb, isLoading: tdbLoading } = useQuery({
     queryKey: ['tableau-de-bord'],
     queryFn:  () => rapportAPI.tableauDeBord().then(r => r.data),
+    enabled:  isGreffier,
   });
 
   const { data: demandesStats } = useQuery({
     queryKey: ['demandes-stats'],
     queryFn:  () => demandeAPI.stats().then(r => r.data),
+    enabled:  isGreffier,
   });
 
   const { data: demandes, isLoading: dmdLoading } = useQuery({
     queryKey: ['demandes-recentes'],
     queryFn:  () => demandeAPI.list({ page: 1 }).then(r => r.data),
+    enabled:  isGreffier,
   });
+
+  // Agent tribunal ou GU → dashboard simplifié sans appels API interdits
+  if (!isGreffier) return <AgentDashboard />;
 
   if (tdbLoading) return <Spin size="large" style={{ display:'block', margin:'60px auto' }} />;
 

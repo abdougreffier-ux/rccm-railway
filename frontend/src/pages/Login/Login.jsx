@@ -18,8 +18,20 @@ const Login = () => {
     setLoading(true);
     setError('');
     try {
-      await login(lgn, password);
-      navigate('/', { replace: true });
+      const loggedUser = await login(lgn, password);
+      // Redirection selon le rôle :
+      // - GREFFIER        → tableau de bord (/)
+      // - AGENT_TRIBUNAL  → liste des modifications (page de travail principale)
+      // - AGENT_GU        → registre chronologique (seule tâche autorisée)
+      const roleCode = loggedUser?.role?.code;
+      if (roleCode === 'AGENT_TRIBUNAL') {
+        navigate('/modifications', { replace: true });
+      } else if (roleCode === 'AGENT_GU') {
+        navigate('/registres/chronologique', { replace: true });
+      } else {
+        // GREFFIER ou superuser → tableau de bord
+        navigate('/', { replace: true });
+      }
     } catch (err) {
       setError(err.response?.data?.detail || (isAr ? 'اسم المستخدم أو كلمة المرور غير صحيحة.' : 'Login ou mot de passe incorrect.'));
     } finally {
