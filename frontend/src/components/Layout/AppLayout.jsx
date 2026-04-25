@@ -13,7 +13,9 @@ const AppLayout = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sidebar collapsed={collapsed} />
+      <ErrorBoundary>
+        <Sidebar collapsed={collapsed} />
+      </ErrorBoundary>
       <Layout>
         <AppHeader collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
         <Content style={{
