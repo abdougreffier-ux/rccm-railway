@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Card, Button, Tag, Descriptions, Typography, Space,
-  Modal, Input, Popconfirm, Alert, message, Table, Form, Tooltip,
+  Modal, Input, Popconfirm, Alert, message, Table, Form, Tooltip, Spin,
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, SendOutlined,
@@ -14,6 +14,7 @@ import { cessionAPI, rapportAPI, openPDF, parametrageAPI } from '../../api/api';
 import PiecesJointesCard from '../../components/PiecesJointesCard';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title } = Typography;
 
@@ -119,7 +120,7 @@ const DetailCession = () => {
   const [validerObs,   setValiderObs]   = useState('');
   const [validerModal, setValiderModal] = useState(false);
 
-  const { data: cession, isLoading } = useQuery({
+  const { data: cession, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cession', id],
     queryFn:  () => cessionAPI.get(id).then(r => r.data),
   });
@@ -199,9 +200,9 @@ const DetailCession = () => {
     onError: e => message.error(_errMsg(e), 6),
   });
 
-  if (isLoading || !cession) {
-    return <div style={{ padding: 40, textAlign: 'center' }}>{isAr ? 'جاري التحميل…' : 'Chargement…'}</div>;
-  }
+  if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '60px auto' }} />;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!cession)  return <AccessDenied onRetry={refetch} style="inline" />;
 
   /* ── Vérification complétude des identités (lignes RCCM) ──────────────── */
   const lignes = cession.lignes || [];

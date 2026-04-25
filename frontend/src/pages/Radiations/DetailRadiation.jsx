@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Card, Button, Tag, Descriptions, Typography, Space,
-  Popconfirm, Alert, message, Modal, Input,
+  Popconfirm, Alert, message, Modal, Input, Spin,
 } from 'antd';
 import {
   ArrowLeftOutlined, CheckCircleOutlined,
@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { getMotifLabel } from './motifRadiation';
 import PiecesJointesCard from '../../components/PiecesJointesCard';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title } = Typography;
 
@@ -33,7 +34,7 @@ const DetailRadiation = () => {
   const [annulModal,  setAnnulModal]  = useState(false);
   const [annulMotif,  setAnnulMotif]  = useState('');
 
-  const { data: rad, isLoading } = useQuery({
+  const { data: rad, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['radiation', id],
     queryFn:  () => radiationAPI.get(id).then(r => r.data),
   });
@@ -80,7 +81,9 @@ const DetailRadiation = () => {
     onError: e => message.error(e.response?.data?.detail || 'Erreur'),
   });
 
-  if (isLoading || !rad) return <div style={{ padding: 40, textAlign: 'center' }}>Chargement…</div>;
+  if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '60px auto' }} />;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!rad)      return <AccessDenied onRetry={refetch} style="inline" />;
 
   // Allow adding docs on VALIDEE radiations (needed for annulation justificatif)
   const isReadOnly = rad.statut === 'REJETEE' || rad.statut === 'ANNULEE';

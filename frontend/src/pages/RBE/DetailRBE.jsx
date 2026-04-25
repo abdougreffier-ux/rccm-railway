@@ -18,6 +18,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { getCiviliteOptions, formatCivilite } from '../../utils/civilite';
 import { useAuth } from '../../contexts/AuthContext';
 import dayjs from 'dayjs';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -94,7 +95,7 @@ const DetailRBE = () => {
   const [benForm]     = Form.useForm();
 
   // ── Données RBE ──────────────────────────────────────────────────────────────
-  const { data: rbe, isLoading } = useQuery({
+  const { data: rbe, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['rbe-detail', id],
     queryFn:  () => rbeAPI.get(id).then(r => r.data),
   });
@@ -336,7 +337,8 @@ const DetailRBE = () => {
 
   // ── Rendu ────────────────────────────────────────────────────────────────────
   if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
-  if (!rbe) return null;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!rbe)      return <AccessDenied onRetry={refetch} style="inline" />;
 
   const isGrefOuAdmin = user?.role === 'GREFFIER' || user?.role === 'ADMIN';
   const docs           = rbe.documents     || [];

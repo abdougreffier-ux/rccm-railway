@@ -15,6 +15,7 @@ import { fmtChrono } from '../../utils/formatters';
 import PiecesJointesCard from '../../components/PiecesJointesCard';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title, Text } = Typography;
 
@@ -250,7 +251,7 @@ const DetailHistorique = () => {
   const [demandeType,   setDemandeType]   = useState(null);
   const [demandeMotif,  setDemandeMotif]  = useState('');
 
-  const { data: ih, isLoading } = useQuery({
+  const { data: ih, isLoading, isError, error } = useQuery({
     queryKey: ['historique', id],
     queryFn:  () => historiqueAPI.get(id).then(r => r.data),
   });
@@ -356,7 +357,8 @@ const DetailHistorique = () => {
   };
 
   if (isLoading) return <Spin style={{ display: 'block', marginTop: 60 }} />;
-  if (!ih) return null;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!ih)       return <AccessDenied onRetry={refetch} style="inline" />;
 
   const d    = ih.donnees || {};
   const s    = ih.statut;

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Spin } from 'antd';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AppLayout from './components/Layout/AppLayout';
+import { getLanding, ROLE } from './config/roles';
 
 // Pages
 import Login              from './pages/Login/Login';
@@ -73,7 +74,7 @@ const TribunalRoute = ({ children }) => {
   const { user, loading, hasRole } = useAuth();
   if (loading) return <div style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'100vh' }}><Spin size="large" /></div>;
   if (!user) return <Navigate to="/login" replace />;
-  return (hasRole('GREFFIER') || hasRole('AGENT_TRIBUNAL')) ? children : <Navigate to="/registres/chronologique" replace />;
+  return (hasRole('GREFFIER') || hasRole('AGENT_TRIBUNAL')) ? children : <Navigate to={getLanding(user)} replace />;
 };
 
 const AppRoutes = () => {

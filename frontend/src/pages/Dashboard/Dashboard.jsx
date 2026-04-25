@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { rapportAPI, demandeAPI } from '../../api/api';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title, Text } = Typography;
 
@@ -62,7 +63,7 @@ const Dashboard = () => {
 
   // Les statistiques générales sont réservées au greffier (CDC §3.2)
   // Ne pas déclencher la requête pour éviter un 403 + spinner bloquant pour les agents
-  const { data: tdb, isLoading: tdbLoading } = useQuery({
+  const { data: tdb, isLoading: tdbLoading, isError: tdbError, error: tdbErr, refetch: tdbRefetch } = useQuery({
     queryKey: ['tableau-de-bord'],
     queryFn:  () => rapportAPI.tableauDeBord().then(r => r.data),
     enabled:  isGreffier,
@@ -84,6 +85,7 @@ const Dashboard = () => {
   if (!isGreffier) return <AgentDashboard />;
 
   if (tdbLoading) return <Spin size="large" style={{ display:'block', margin:'60px auto' }} />;
+  if (tdbError)   return <AccessDenied status={tdbErr?.response?.status} onRetry={tdbRefetch} style="inline" />;
 
   const totaux = tdb?.totaux || {};
 

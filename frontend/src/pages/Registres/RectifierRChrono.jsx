@@ -10,6 +10,7 @@ import dayjs from 'dayjs';
 import { registreAPI } from '../../api/api';
 import { fmtChrono } from '../../utils/formatters';
 import { useLanguage } from '../../contexts/LanguageContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -49,7 +50,7 @@ const RectifierRChrono = () => {
   const [form]      = Form.useForm();
 
   // ── Charger le RC existant ──────────────────────────────────────────────────
-  const { data: rc, isLoading } = useQuery({
+  const { data: rc, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['rchrono-detail', id],
     queryFn:  () => registreAPI.getChrono(id).then(r => r.data),
   });
@@ -128,7 +129,8 @@ const RectifierRChrono = () => {
 
   // ── Rendu ──────────────────────────────────────────────────────────────────
   if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
-  if (!rc) return null;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!rc)       return <AccessDenied onRetry={refetch} style="inline" />;
 
   const statutLabel = rc.statut === 'RETOURNE' ? 'Retourné' : 'Brouillon';
 

@@ -12,16 +12,14 @@ import {
 } from '@ant-design/icons';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { ROLE_GROUP } from '../../config/roles';
 
 const { Sider } = Layout;
 
-// ── Constantes rôles ──────────────────────────────────────────────────────────
-const GREFFIER       = 'GREFFIER';
-const AGENT_GU       = 'AGENT_GU';
-const AGENT_TRIBUNAL = 'AGENT_TRIBUNAL';
-const ALL_STAFF      = [GREFFIER, AGENT_GU, AGENT_TRIBUNAL];
-const TRIBUNAL_ONLY  = [GREFFIER, AGENT_TRIBUNAL];
-const GREFFIER_ONLY  = [GREFFIER];
+// ── Constantes rôles (source unique : config/roles.js) ────────────────────────
+const ALL_STAFF     = ROLE_GROUP.ALL_STAFF;
+const TRIBUNAL_ONLY = ROLE_GROUP.TRIBUNAL_ONLY;
+const GREFFIER_ONLY = ROLE_GROUP.GREFFIER_ONLY;
 
 const Sidebar = ({ collapsed }) => {
   const navigate  = useNavigate();

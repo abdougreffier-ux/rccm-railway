@@ -13,6 +13,7 @@ import { cessionsFondsAPI, openPDF } from '../../api/api';
 import PiecesJointesCard from '../../components/PiecesJointesCard';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -41,7 +42,7 @@ const DetailCessionFonds = () => {
   const [validerModal, setValiderModal] = useState(false);
   const [validerObs,   setValiderObs]   = useState('');
 
-  const { data: cf, isLoading, error } = useQuery({
+  const { data: cf, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cession-fonds', id],
     queryFn:  () => cessionsFondsAPI.get(id).then(r => r.data),
   });
@@ -90,7 +91,8 @@ const DetailCessionFonds = () => {
   });
 
   if (isLoading) return <Spin style={{ display: 'block', margin: '40px auto' }} />;
-  if (error || !cf) return <Alert type="error" message="Cession de fonds introuvable." />;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!cf)       return <AccessDenied onRetry={refetch} style="inline" />;
 
   const statut = cf.statut || '';
   const snap   = cf.snapshot_cedant || {};

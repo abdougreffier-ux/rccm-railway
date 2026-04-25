@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { parametrageAPI } from '../../api/api';
 import PAYS from '../../data/pays';
 import { useLanguage } from '../../contexts/LanguageContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title, Text } = Typography;
 
@@ -323,7 +324,7 @@ const NumerotationTab = () => {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['numerotation-admin'],
     queryFn:  () => parametrageAPI.numerotation().then(r => r.data),
   });
@@ -341,6 +342,7 @@ const NumerotationTab = () => {
   });
 
   if (isLoading) return <Spin />;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
 
   return (
     <div>

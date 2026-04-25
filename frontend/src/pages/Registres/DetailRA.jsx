@@ -17,6 +17,7 @@ import { registreAPI, rapportAPI, radiationAPI, documentAPI, parametrageAPI, aut
 import { useLanguage } from '../../contexts/LanguageContext';
 import { formatCivilite } from '../../utils/civilite';
 import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -217,7 +218,7 @@ const DetailRA = () => {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [typeDocId,     setTypeDocId]     = useState(null);
 
-  const { data: ra, isLoading, isError, error } = useQuery({
+  const { data: ra, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['ra', id],
     queryFn:  () => registreAPI.getRA(id).then(r => r.data),
     retry: 1,
@@ -354,26 +355,8 @@ const DetailRA = () => {
   };
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '60px auto' }} />;
-  if (isError) return (
-    <Alert
-      type="error"
-      showIcon
-      style={{ margin: '40px' }}
-      message={t('msg.error')}
-      description={error?.response?.data?.detail || error?.message || 'Erreur lors du chargement du dossier. Vérifiez la console du serveur.'}
-      action={<Button onClick={() => navigate('/registres/analytique')}>{t('action.back')}</Button>}
-    />
-  );
-  if (!ra) return (
-    <Alert
-      type="warning"
-      showIcon
-      style={{ margin: '40px' }}
-      message="Dossier introuvable"
-      description={`Aucun dossier trouvé avec l'identifiant ${id}.`}
-      action={<Button onClick={() => navigate('/registres/analytique')}>{t('action.back')}</Button>}
-    />
-  );
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!ra)       return <AccessDenied onRetry={refetch} style="inline" />;
 
   const STATUT_TAG = {
     BROUILLON:              { color: 'default',    label: t('status.brouillon') },

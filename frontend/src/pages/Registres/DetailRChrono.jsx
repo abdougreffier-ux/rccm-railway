@@ -16,6 +16,7 @@ import { registreAPI, documentAPI, rapportAPI, parametrageAPI, autorisationAPI, 
 import { fmtChrono } from '../../utils/formatters';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title } = Typography;
 
@@ -73,7 +74,7 @@ const DetailRChrono = () => {
 
 
   // ── Données RC ──────────────────────────────────────────────────────────────
-  const { data: rc, isLoading } = useQuery({
+  const { data: rc, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['rchrono-detail', id],
     queryFn:  () => registreAPI.getChrono(id).then(r => r.data),
   });
@@ -224,7 +225,8 @@ const DetailRChrono = () => {
 
   // ── Rendu ────────────────────────────────────────────────────────────────────
   if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
-  if (!rc) return null;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!rc)       return <AccessDenied onRetry={refetch} style="inline" />;
 
   let descParsed = {};
   try { descParsed = typeof rc.description_parsed === 'object' ? rc.description_parsed : JSON.parse(rc.description || '{}'); } catch {}

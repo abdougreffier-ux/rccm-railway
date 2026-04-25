@@ -879,6 +879,26 @@ export const FR = {
   'hist.import.colDetails':        'Détails',
   'hist.import.creeSucces':        'Créé avec succès',
   'hist.import.createdMsg':        'demande(s) créée(s) en brouillon. Elles sont maintenant disponibles dans la liste.',
+
+  // ── Erreurs d'accès (AccessDenied) ───────────────────────────────────────
+  'error.401.title':   '401 – Session expirée',
+  'error.401.message': 'Votre session a expiré. Veuillez vous identifier à nouveau.',
+  'error.401.cta':     'Se reconnecter',
+  'error.403.title':   '403 – Accès refusé',
+  'error.403.message': "Vous ne disposez pas des droits nécessaires pour accéder à cette page.",
+  'error.403.cta':     'Retour à mon espace de travail',
+  'error.load.title':  'Impossible de charger',
+  'error.load.message':'La ressource est temporairement indisponible. Vérifiez votre connexion ou réessayez.',
+  'error.load.retry':  'Réessayer',
+  'error.load.back':   'Retour à mon espace',
+
+  // ── États de chargement ───────────────────────────────────────────────────
+  'loading.title':     'Chargement en cours…',
+  'loading.message':   'Veuillez patienter.',
+
+  // ── Erreurs listes ────────────────────────────────────────────────────────
+  'list.error.title':  'Impossible de charger les données',
+  'list.error.desc':   'Vérifiez vos permissions ou rechargez la page.',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1760,4 +1780,24 @@ export const AR = {
   'hist.import.colDetails':        'التفاصيل',
   'hist.import.creeSucces':        'تم الإنشاء بنجاح',
   'hist.import.createdMsg':        'طلب/طلبات أُنشئت كمسودة. متاحة الآن في القائمة.',
+
+  // ── أخطاء الوصول (AccessDenied) ──────────────────────────────────────────
+  'error.401.title':   '401 – انتهت الجلسة',
+  'error.401.message': 'انتهت صلاحية جلستك. يرجى تسجيل الدخول مجدداً.',
+  'error.401.cta':     'تسجيل الدخول',
+  'error.403.title':   '403 – الوصول مرفوض',
+  'error.403.message': 'ليس لديك الصلاحيات اللازمة للوصول إلى هذه الصفحة.',
+  'error.403.cta':     'العودة إلى مساحة عملي',
+  'error.load.title':  'تعذّر التحميل',
+  'error.load.message':'المورد غير متاح مؤقتاً. تحقق من اتصالك أو حاول مجدداً.',
+  'error.load.retry':  'إعادة المحاولة',
+  'error.load.back':   'العودة إلى مساحة عملي',
+
+  // ── حالات التحميل ─────────────────────────────────────────────────────────
+  'loading.title':     'جارٍ التحميل…',
+  'loading.message':   'يُرجى الانتظار.',
+
+  // ── أخطاء القوائم ─────────────────────────────────────────────────────────
+  'list.error.title':  'تعذّر تحميل البيانات',
+  'list.error.desc':   'تحقق من صلاحياتك أو أعد تحميل الصفحة.',
 };

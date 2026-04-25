@@ -10,6 +10,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { rbeAPI } from '../../api/api';
 import { useLanguage } from '../../contexts/LanguageContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title, Text } = Typography;
 
@@ -41,16 +42,15 @@ const TYPE_DECL_LABELS = {
 const RapportRBE = () => {
   const { isAr } = useLanguage();
 
-  const { data: stats, isLoading, isError } = useQuery({
+  const { data: stats, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['rbe-reporting'],
     queryFn:  () => rbeAPI.reporting().then(r => r.data),
     refetchInterval: 60_000,
   });
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '80px auto' }} />;
-  if (isError || !stats) return (
-    <Alert type="error" message="Impossible de charger les statistiques." showIcon />
-  );
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!stats)    return <AccessDenied onRetry={refetch} style="inline" />;
 
   const { total, par_statut, en_retard, source, par_type_entite, par_type_declaration, hors_rc_sans_declaration } = stats;
 

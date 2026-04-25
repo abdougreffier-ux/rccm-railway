@@ -8,6 +8,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { rbeAPI } from '../../api/api';
 import { useLanguage } from '../../contexts/LanguageContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -28,7 +29,7 @@ const FormulaireRadiationRBE = () => {
   const [form]   = Form.useForm();
 
   // ── Données de la déclaration à radier ───────────────────────────────────────
-  const { data: rbe, isLoading } = useQuery({
+  const { data: rbe, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['rbe-detail', id],
     queryFn:  () => rbeAPI.get(id).then(r => r.data),
   });
@@ -54,7 +55,8 @@ const FormulaireRadiationRBE = () => {
   };
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
-  if (!rbe) return null;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!rbe)      return <AccessDenied onRetry={refetch} style="inline" />;
 
   const STATUT_LABELS = {
     BROUILLON: 'Brouillon', EN_ATTENTE: 'En attente', RETOURNE: 'Retourné',

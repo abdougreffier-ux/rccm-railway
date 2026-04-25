@@ -12,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { depotAPI, documentAPI, parametrageAPI, openPDF } from '../../api/api';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { formatCivilite } from '../../utils/civilite';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title, Text } = Typography;
 
@@ -23,7 +24,7 @@ const DetailDepot = () => {
   const [typeDocId, setTypeDocId]   = useState(null);
   const { t, isAr } = useLanguage();
 
-  const { data: depot, isLoading } = useQuery({
+  const { data: depot, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['depot', id],
     queryFn:  () => depotAPI.get(id).then(r => r.data),
   });
@@ -61,7 +62,8 @@ const DetailDepot = () => {
   };
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '80px auto' }} />;
-  if (!depot)   return null;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!depot)    return <AccessDenied onRetry={refetch} style="inline" />;
 
   const fj_str  = depot.forme_juridique_libelle || '—';
   const cap_str = depot.capital

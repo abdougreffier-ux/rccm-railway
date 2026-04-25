@@ -4,6 +4,7 @@ import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { getLanding } from '../../config/roles';
 
 const { Title, Text } = Typography;
 
@@ -19,19 +20,8 @@ const Login = () => {
     setError('');
     try {
       const loggedUser = await login(lgn, password);
-      // Redirection selon le rôle :
-      // - GREFFIER        → tableau de bord (/)
-      // - AGENT_TRIBUNAL  → liste des modifications (page de travail principale)
-      // - AGENT_GU        → registre chronologique (seule tâche autorisée)
-      const roleCode = loggedUser?.role?.code;
-      if (roleCode === 'AGENT_TRIBUNAL') {
-        navigate('/modifications', { replace: true });
-      } else if (roleCode === 'AGENT_GU') {
-        navigate('/registres/chronologique', { replace: true });
-      } else {
-        // GREFFIER ou superuser → tableau de bord
-        navigate('/', { replace: true });
-      }
+      // Redirection selon le rôle (matrice centralisée dans config/roles.js)
+      navigate(getLanding(loggedUser), { replace: true });
     } catch (err) {
       setError(err.response?.data?.detail || (isAr ? 'اسم المستخدم أو كلمة المرور غير صحيحة.' : 'Login ou mot de passe incorrect.'));
     } finally {

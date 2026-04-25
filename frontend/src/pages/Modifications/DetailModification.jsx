@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Card, Button, Tag, Descriptions, Typography, Space, Divider,
-  Modal, Input, Popconfirm, Alert, message, Table, Form,
+  Modal, Input, Popconfirm, Alert, message, Table, Form, Spin,
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, SendOutlined,
@@ -14,6 +14,7 @@ import { modifAPI, rapportAPI, openPDF, parametrageAPI } from '../../api/api';
 import PiecesJointesCard from '../../components/PiecesJointesCard';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title, Text } = Typography;
 
@@ -36,7 +37,7 @@ const DetailModification = () => {
   const [validerObs,   setValiderObs]   = useState('');
   const [validerModal, setValiderModal] = useState(false);
 
-  const { data: modif, isLoading } = useQuery({
+  const { data: modif, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['modification', id],
     queryFn:  () => modifAPI.get(id).then(r => r.data),
   });
@@ -80,7 +81,9 @@ const DetailModification = () => {
     queryFn:  () => parametrageAPI.formesJuridiques().then(r => r.data?.results || r.data || []),
   });
 
-  if (isLoading || !modif) return <div style={{ padding: 40, textAlign: 'center' }}>Chargement…</div>;
+  if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '60px auto' }} />;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!modif)    return <AccessDenied onRetry={refetch} style="inline" />;
 
   const nd     = modif.nouvelles_donnees || {};
   const entity = nd.entity || {};

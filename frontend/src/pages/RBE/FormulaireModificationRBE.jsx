@@ -13,6 +13,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { rbeAPI, parametrageAPI } from '../../api/api';
 import { useLanguage } from '../../contexts/LanguageContext';
 import dayjs from 'dayjs';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -190,7 +191,7 @@ const FormulaireModificationRBE = () => {
   const [beneficiaires, setBeneficiaires] = useState([]);
 
   // ── Données déclaration d'origine ────────────────────────────────────────────
-  const { data: rbe, isLoading } = useQuery({
+  const { data: rbe, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['rbe-detail', id],
     queryFn:  () => rbeAPI.get(id).then(r => r.data),
   });
@@ -241,7 +242,8 @@ const FormulaireModificationRBE = () => {
   };
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
-  if (!rbe) return null;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!rbe)      return <AccessDenied onRetry={refetch} style="inline" />;
 
   const STATUT_LABELS = {
     BROUILLON: 'Brouillon', EN_ATTENTE: 'En attente', RETOURNE: 'Retourné',

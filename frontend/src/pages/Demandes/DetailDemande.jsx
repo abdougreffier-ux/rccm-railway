@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { demandeAPI } from '../../api/api';
 import { useLanguage } from '../../contexts/LanguageContext';
+import AccessDenied from '../../components/Common/AccessDenied';
 
 const { Title } = Typography;
 const STATUT_COLOR = { SAISIE: 'default', SOUMISE: 'blue', EN_TRAITEMENT: 'orange', VALIDEE: 'success', REJETEE: 'error', ANNULEE: 'default' };
@@ -16,7 +17,7 @@ const DetailDemande = () => {
   const [motif, setMotif]               = useState('');
   const { t } = useLanguage();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['demande', id],
     queryFn:  () => demandeAPI.get(id).then(r => r.data),
   });
@@ -43,7 +44,8 @@ const DetailDemande = () => {
   });
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '60px auto' }} />;
-  if (!data) return null;
+  if (isError)   return <AccessDenied status={error?.response?.status} onRetry={refetch} style="inline" />;
+  if (!data)     return <AccessDenied onRetry={refetch} style="inline" />;
 
   const ligneCols = [
     { title: t('field.piece'),    dataIndex: 'libelle',      key: 'libelle' },
