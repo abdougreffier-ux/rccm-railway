@@ -78,11 +78,11 @@ const ListeDepots = () => {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <Title level={4} style={{ margin: 0 }}>📥 Dépôts</Title>
+        <Title level={4} style={{ margin: 0 }}>{isAr ? '📥 الإيداعات' : '📥 Dépôts'}</Title>
         <Button type="primary" icon={<PlusOutlined />}
           onClick={() => navigate('/depots/nouveau')}
           style={{ background: '#1a4480' }}>
-          Nouveau dépôt
+          {isAr ? 'إيداع جديد' : 'Nouveau dépôt'}
         </Button>
       </div>
 

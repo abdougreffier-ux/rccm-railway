@@ -90,11 +90,11 @@ const ListeCessions = () => {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>Cessions de parts / actions</Title>
+        <Title level={4} style={{ margin: 0 }}>{isAr ? 'تنازلات الحصص / الأسهم' : 'Cessions de parts / actions'}</Title>
         <Button type="primary" icon={<PlusOutlined />}
           onClick={() => navigate('/cessions/nouvelle')}
           style={{ background: '#1a4480' }}>
-          Nouvelle cession
+          {isAr ? 'تنازل جديد عن الحصص' : 'Nouvelle cession'}
         </Button>
       </div>
       {isError && (

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Table, Button, Tag, Typography, Tooltip, Select, Alert } from 'antd';
-import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Tag, Typography, Tooltip, Select, Alert, Space } from 'antd';
+import { PlusOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { modifAPI } from '../../api/api';
@@ -53,8 +53,22 @@ const ListeModifications = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>{isAr ? 'التعديلات' : 'Modifications'}</Title>
-        {/* Seuls les agents du tribunal créent des modifications (le greffier valide) */}
-        {!isGreffier && (
+        {/*
+          Règle CDC §3.2 : les inscriptions modificatives sont INITIÉES par les agents du tribunal.
+          Le greffier valide — il ne crée pas. Le bouton est toujours rendu (jamais conditionné aux
+          données) ; il est désactivé pour le greffier avec un message explicite bilingue.
+        */}
+        {isGreffier ? (
+          <Tooltip
+            title={isAr
+              ? 'يُنشئ قيود التعديل أعوانُ المحكمة حصراً — يتولى الكاتب التحقق والمصادقة'
+              : 'Les inscriptions modificatives sont initiées par les agents du tribunal — le greffier valide uniquement'}
+          >
+            <Button disabled icon={<LockOutlined />}>
+              {isAr ? 'قيد تعديل جديد' : 'Nouvelle modification'}
+            </Button>
+          </Tooltip>
+        ) : (
           <Button type="primary" icon={<PlusOutlined />}
             onClick={() => navigate('/modifications/nouvelle')}
             style={{ background: '#1a4480' }}>

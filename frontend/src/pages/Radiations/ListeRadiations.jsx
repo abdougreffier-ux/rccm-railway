@@ -41,14 +41,14 @@ const ListeRadiations = () => {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>Radiations</Title>
+        <Title level={4} style={{ margin: 0 }}>{isAr ? 'قيود الشطب' : 'Radiations'}</Title>
         <Button
           type="primary"
           icon={<PlusOutlined />}
           style={{ background: '#b91c1c' }}
           onClick={() => navigate('/radiations/nouvelle')}
         >
-          Nouvelle radiation
+          {isAr ? 'قيد شطب جديد' : 'Nouvelle radiation'}
         </Button>
       </div>
 
