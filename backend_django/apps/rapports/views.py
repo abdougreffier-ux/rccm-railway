@@ -111,26 +111,59 @@ except ImportError:
 
 # ── Police Unicode pour l'arabe ────────────────────────────────────────────────
 # ReportLab ne peut afficher des glyphes arabes qu'avec une police TTF Unicode.
-# On essaie les emplacements courants (Windows, Linux).
-_ARABIC_FONT = 'Helvetica'   # fallback si aucune police Unicode trouvée
+#
+# Stratégie (priorité décroissante) :
+#   1. Police embarquée dans le dépôt — assets/fonts/Amiri-*.ttf
+#      → garantit l'arabe sur TOUS les environnements (Railway, Docker, CI, local)
+#   2. Polices système Windows (développement local)
+#   3. Polices système Linux (apt install fonts-*)
+#
+# Si aucune police n'est trouvée, un log CRITICAL est émis ET le texte arabe
+# s'affichera en carrés — comportement clairement détectable.
+
+_FONTS_DIR      = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'fonts')
+_ARABIC_FONT     = 'Helvetica'       # fallback (carrés) — ne doit jamais rester actif
+_ARABIC_FONT_BOLD = 'Helvetica-Bold' # idem pour le gras
 
 _FONT_CANDIDATES = [
+    # ── 1. Police embarquée (toujours disponible dans le dépôt) ──────────────
+    ('Amiri',        os.path.join(_FONTS_DIR, 'Amiri-Regular.ttf')),
+    # ── 2. Polices système Windows (développement) ───────────────────────────
     ('ArialUnicode', 'C:/Windows/Fonts/arial.ttf'),
     ('ArialUnicode', 'C:/Windows/Fonts/Arial.ttf'),
     ('Tahoma',       'C:/Windows/Fonts/tahoma.ttf'),
+    # ── 3. Polices système Linux (serveur sans la police embarquée) ───────────
     ('DejaVuSans',   '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'),
     ('FreeSans',     '/usr/share/fonts/truetype/freefont/FreeSans.ttf'),
     ('NotoArabic',   '/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf'),
+    ('NotoArabic',   '/usr/share/fonts/truetype/noto-cjk/NotoNaskhArabic-Regular.ttf'),
 ]
 
 for _fname, _fpath in _FONT_CANDIDATES:
-    if os.path.exists(_fpath):
-        try:
-            pdfmetrics.registerFont(TTFont(_fname, _fpath))
-            _ARABIC_FONT = _fname
-        except Exception:
-            pass
-        break   # premier trouvé suffit
+    if not os.path.exists(_fpath):
+        continue
+    try:
+        pdfmetrics.registerFont(TTFont(_fname, _fpath))
+        _ARABIC_FONT = _fname
+        # Enregistrer le gras Amiri si disponible (même dossier que le regular)
+        _bold_path = os.path.join(_FONTS_DIR, 'Amiri-Bold.ttf')
+        if _fname == 'Amiri' and os.path.exists(_bold_path):
+            pdfmetrics.registerFont(TTFont('Amiri-Bold', _bold_path))
+            _ARABIC_FONT_BOLD = 'Amiri-Bold'
+        logging.getLogger('rccm.pdf_audit').info(
+            'Police arabe chargée : %s (%s)', _fname, _fpath
+        )
+        break
+    except Exception as _font_err:
+        logging.getLogger('rccm.pdf_audit').warning(
+            'Police arabe [%s] inutilisable : %s', _fpath, _font_err
+        )
+else:
+    # Aucune police arabe disponible — texte arabe sera illisible (carrés)
+    logging.getLogger('rccm.pdf_audit').critical(
+        'AUCUNE police arabe chargée — le texte arabe s\'affichera en carrés. '
+        'Vérifier la présence de assets/fonts/Amiri-Regular.ttf dans le conteneur.'
+    )
 
 
 # ── Support mise en forme du texte arabe ──────────────────────────────────────
