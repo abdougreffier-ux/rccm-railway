@@ -113,22 +113,36 @@ except ImportError:
 # ReportLab ne peut afficher des glyphes arabes qu'avec une police TTF Unicode.
 #
 # Stratégie (priorité décroissante) :
-#   1. Police embarquée dans le dépôt — assets/fonts/Amiri-*.ttf
-#      → garantit l'arabe sur TOUS les environnements (Railway, Docker, CI, local)
-#   2. Polices système Windows (développement local)
-#   3. Polices système Linux (apt install fonts-*)
+#   1a. Police embarquée — chemin relatif à views.py  (via __file__)
+#   1b. Police embarquée — chemin relatif à BASE_DIR Django (plus robuste Railway)
+#   2.  Polices système Windows (développement local)
+#   3.  Polices système Linux (apt install fonts-*)
 #
+# Les deux chemins 1a/1b pointent vers le même fichier TTF committé dans le dépôt.
 # Si aucune police n'est trouvée, un log CRITICAL est émis ET le texte arabe
-# s'affichera en carrés — comportement clairement détectable.
+# s'affichera en carrés — comportement immédiatement détectable dans les logs.
 
 _FONTS_DIR      = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'fonts')
 _ARABIC_FONT     = 'Helvetica'       # fallback (carrés) — ne doit jamais rester actif
 _ARABIC_FONT_BOLD = 'Helvetica-Bold' # idem pour le gras
 
+# Chemin alternatif via BASE_DIR Django (plus stable si __file__ est un .pyc ou
+# si le module est chargé depuis un répertoire de travail différent sur Railway)
+try:
+    from django.conf import settings as _dj_settings
+    _FONTS_DIR_DJANGO = os.path.join(
+        str(getattr(_dj_settings, 'BASE_DIR', '')),
+        'apps', 'rapports', 'assets', 'fonts',
+    )
+except Exception:
+    _FONTS_DIR_DJANGO = ''
+
 _FONT_CANDIDATES = [
-    # ── 1. Police embarquée (toujours disponible dans le dépôt) ──────────────
-    ('Amiri',        os.path.join(_FONTS_DIR, 'Amiri-Regular.ttf')),
-    # ── 2. Polices système Windows (développement) ───────────────────────────
+    # ── 1a. Police embarquée — chemin via __file__ ────────────────────────────
+    ('Amiri', os.path.join(_FONTS_DIR,        'Amiri-Regular.ttf')),
+    # ── 1b. Police embarquée — chemin via BASE_DIR Django ────────────────────
+    ('Amiri', os.path.join(_FONTS_DIR_DJANGO,  'Amiri-Regular.ttf') if _FONTS_DIR_DJANGO else ''),
+    # ── 2. Polices système Windows (développement local) ──────────────────────
     ('ArialUnicode', 'C:/Windows/Fonts/arial.ttf'),
     ('ArialUnicode', 'C:/Windows/Fonts/Arial.ttf'),
     ('Tahoma',       'C:/Windows/Fonts/tahoma.ttf'),
@@ -140,18 +154,25 @@ _FONT_CANDIDATES = [
 ]
 
 for _fname, _fpath in _FONT_CANDIDATES:
-    if not os.path.exists(_fpath):
+    if not _fpath or not os.path.exists(_fpath):
         continue
     try:
         pdfmetrics.registerFont(TTFont(_fname, _fpath))
         _ARABIC_FONT = _fname
-        # Enregistrer le gras Amiri si disponible (même dossier que le regular)
-        _bold_path = os.path.join(_FONTS_DIR, 'Amiri-Bold.ttf')
-        if _fname == 'Amiri' and os.path.exists(_bold_path):
-            pdfmetrics.registerFont(TTFont('Amiri-Bold', _bold_path))
-            _ARABIC_FONT_BOLD = 'Amiri-Bold'
+        # Enregistrer le gras Amiri dans les deux chemins possibles
+        for _bd in (_FONTS_DIR, _FONTS_DIR_DJANGO):
+            if not _bd:
+                continue
+            _bold_path = os.path.join(_bd, 'Amiri-Bold.ttf')
+            if _fname == 'Amiri' and os.path.exists(_bold_path):
+                try:
+                    pdfmetrics.registerFont(TTFont('Amiri-Bold', _bold_path))
+                    _ARABIC_FONT_BOLD = 'Amiri-Bold'
+                except Exception:
+                    pass
+                break
         logging.getLogger('rccm.pdf_audit').info(
-            'Police arabe chargée : %s (%s)', _fname, _fpath
+            'Police arabe chargee : %s (%s)', _fname, _fpath
         )
         break
     except Exception as _font_err:
@@ -159,10 +180,11 @@ for _fname, _fpath in _FONT_CANDIDATES:
             'Police arabe [%s] inutilisable : %s', _fpath, _font_err
         )
 else:
-    # Aucune police arabe disponible — texte arabe sera illisible (carrés)
+    # Aucune police arabe disponible — texte arabe sera illisible (carres)
     logging.getLogger('rccm.pdf_audit').critical(
-        'AUCUNE police arabe chargée — le texte arabe s\'affichera en carrés. '
-        'Vérifier la présence de assets/fonts/Amiri-Regular.ttf dans le conteneur.'
+        'AUCUNE police arabe chargee — texte arabe = carres. '
+        'Chemins testes : __file__=%s | BASE_DIR=%s',
+        _FONTS_DIR, _FONTS_DIR_DJANGO,
     )
 
 
@@ -1294,12 +1316,14 @@ def _numero_chrono_display(numero_chrono):
 
 
 def _get_numero_chrono(ra):
-    """Retourne le N° chronologique d'un RA, avec triple cascade robuste.
+    """Retourne le N° chronologique d'un RA, avec cascade quadruple robuste.
 
     Stratégie (priorité décroissante) :
       1. ra.numero_rc stripped  — référence AAAA/NNN déjà stockée sur le RA.
-      2. Premier RC chronologique validé (ra.chronos) — utile quand numero_rc est vide.
-      3. ra.numero_rc brut      — si pas de séparateur AAAA/NNN (ancien format).
+      2. Premier RC VALIDE      — statut='VALIDE', trié par date validation DESC.
+      3. Premier RC quelconque  — tout statut (BROUILLON, EN_INSTANCE, etc.)
+         couvre le cas fréquent en test/Cloud où le RC n'est pas encore validé.
+      4. ra.numero_rc brut      — si pas de séparateur AAAA/NNN (ancien format).
 
     Compatible avec prefetch_related('chronos') et prefetch_related('ra__chronos').
     Ne lève jamais d'exception ; retourne '—' si aucune donnée disponible.
@@ -1310,14 +1334,22 @@ def _get_numero_chrono(ra):
     n = _strip_rc_numero(getattr(ra, 'numero_rc', '') or '')
     if n:
         return n
-    # 2. Premier chrono validé (prefetch déjà en place dans toutes les vues)
+    # 2. Premier chrono VALIDE (prefetch déjà en place dans toutes les vues)
     try:
         rc_obj = ra.chronos.filter(statut='VALIDE').order_by('-validated_at').first()
         if rc_obj and rc_obj.numero_chrono:
-            return str(rc_obj.numero_chrono).strip()
+            return _numero_chrono_display(str(rc_obj.numero_chrono).strip())
     except Exception:
         pass
-    # 3. ra.numero_rc brut
+    # 3. Tout chrono lié au RA, quel que soit son statut
+    # (couvre BROUILLON / EN_INSTANCE quand le greffier n'a pas encore validé)
+    try:
+        rc_any = ra.chronos.order_by('id').first()
+        if rc_any and rc_any.numero_chrono:
+            return _numero_chrono_display(str(rc_any.numero_chrono).strip())
+    except Exception:
+        pass
+    # 4. ra.numero_rc brut
     raw = (getattr(ra, 'numero_rc', '') or '').strip()
     return raw or '—'
 
