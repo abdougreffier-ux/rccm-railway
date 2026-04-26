@@ -1,0 +1,6 @@
+# Configuration Nixpacks — RCCM Frontend
+# Remplace npm ci (strict) par npm install pour éviter les erreurs EUSAGE
+# dues aux écarts de version npm entre l'environnement local et Railway.
+
+[phases.install]
+cmds = ["npm install --prefer-offline --no-audit --no-fund"]
