@@ -194,10 +194,20 @@ try:
     from bidi.algorithm import get_display as bidi_display
 
     def ar(text):
-        """Reshape + réordonne le texte arabe pour ReportLab."""
+        """
+        Reshape + réordonne le texte arabe pour ReportLab (RTL correct).
+        Défensif : en cas d'erreur runtime (Python 3.12 / bidi / reshaper),
+        retourne le texte brut plutôt que propager une exception vers la vue.
+        """
         if not text:
             return ''
-        return bidi_display(arabic_reshaper.reshape(str(text)))
+        try:
+            return bidi_display(arabic_reshaper.reshape(str(text)))
+        except Exception as _ar_err:
+            logging.getLogger('rccm').warning(
+                'ar() — échec reshape/bidi pour "%s…" : %s', str(text)[:30], _ar_err
+            )
+            return str(text)
 except ImportError:
     def ar(text):
         return str(text) if text else ''
@@ -2386,6 +2396,25 @@ class ExtraitRCView(PdfAuditMixin, APIView):
         except RegistreAnalytique.DoesNotExist:
             return Response({'detail': 'Introuvable.'}, status=http_status.HTTP_404_NOT_FOUND)
 
+        # ── Enveloppe diagnostique : capture le traceback exact dans les logs Railway ──
+        try:
+            return self._generate_pdf(request, ra)
+        except Exception as _exc:
+            import traceback as _tb
+            logging.getLogger('rccm').error(
+                '[ExtraitRCView] ERREUR génération PDF ra_id=%s type=%s lang=%s : %s\n%s',
+                ra.pk, ra.type_entite,
+                getattr(ra, '_lang_debug', '?'),
+                _exc, _tb.format_exc(),
+            )
+            return Response(
+                {'detail': f'Erreur génération PDF : {_exc}',
+                 'detail_ar': 'خطأ أثناء إنشاء المستند.'},
+                status=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _generate_pdf(self, request, ra):
+        """Corps de la génération — séparé pour exposer le traceback exact dans les logs."""
         signataire = _get_signataire()
         # ── Règle RCCM : langue exclusivement celle du chrono d'immatriculation — jamais celle de l'UI
         lang       = _get_langue_acte_from_ra(ra)
