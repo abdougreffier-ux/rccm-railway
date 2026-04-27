@@ -86,7 +86,10 @@ class PdfAuditMixin:
 
         # Extraire l'ID de dossier depuis les kwargs URL (ra_id, rc_id, rbe_id, etc.)
         ref = next((str(v) for v in kwargs.values() if v is not None), '?')
-        lang = request.query_params.get('lang', 'fr')
+        # request ici est encore le WSGIRequest Django (avant que DRF ne l'enveloppe
+        # dans initialize_request).  query_params est un attribut DRF qui n'existe pas
+        # sur WSGIRequest — utiliser .GET qui est l'équivalent natif Django.
+        lang = request.GET.get('lang', 'fr')
         status_code = getattr(response, 'status_code', 0)
         succes = (status_code == 200)
 
