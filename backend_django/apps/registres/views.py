@@ -137,6 +137,54 @@ class RegistreAnalytiqueDetail(generics.RetrieveUpdateAPIView):
             return [EstAgentTribunalOuGreffier()]
         return [EstGreffier()]
 
+    def get_object(self):
+        """
+        Cloisonnement renforcé (CDC §3) :
+        ─ Greffier     : accès illimité à tous les dossiers.
+        ─ Agent        : accès uniquement aux dossiers qu'il a créés (created_by = user).
+                         Exception : si une autorisation valide (IMPRESSION non expirée
+                         ou CORRECTION) a été accordée par le greffier pour ce dossier
+                         précis, l'accès en lecture est autorisé.
+        Toute tentative d'accès sans droit retourne HTTP 403 bilingue FR / AR.
+        """
+        obj  = super().get_object()   # récupère via queryset complet + check_object_permissions
+        user = self.request.user
+
+        # ── Greffier : accès total ────────────────────────────────────────────
+        if est_greffier(user):
+            return obj
+
+        # ── Propriétaire direct ───────────────────────────────────────────────
+        if obj.created_by_id == user.pk:
+            return obj
+
+        # ── Autorisation greffier valide pour ce dossier ──────────────────────
+        # Type IMPRESSION : valide tant que date_expiration n'est pas dépassée.
+        # Type CORRECTION : pas d'expiration — le dossier est retourné à l'agent.
+        from apps.autorisations.models import DemandeAutorisation
+        from django.utils import timezone as _tz
+        from django.db.models import Q
+        now = _tz.now()
+        if DemandeAutorisation.objects.filter(
+            demandeur=user,
+            type_dossier='RA',
+            dossier_id=obj.pk,
+            statut='AUTORISEE',
+        ).filter(
+            Q(type_demande='CORRECTION') |
+            Q(type_demande='IMPRESSION', date_expiration__gt=now)
+        ).exists():
+            return obj
+
+        # ── Accès refusé ──────────────────────────────────────────────────────
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied({
+            'detail':    "Accès non autorisé. Ce dossier ne vous appartient pas. "
+                         "Soumettez une demande d'autorisation au greffier.",
+            'detail_ar': 'الوصول غير مصرح به. هذا الملف لا يخصك. '
+                         'يرجى تقديم طلب إذن إلى كاتب الضبط.',
+        })
+
 
 # ── Workflow : Envoyer au greffier ────────────────────────────────────────────
 
@@ -359,15 +407,23 @@ class RegistreChronologiqueListCreate(generics.ListCreateAPIView):
 
 
 class RegistreChronologiqueDetail(generics.RetrieveUpdateAPIView):
-    """Détail/mise à jour RC — agents + greffier."""
+    """
+    Détail/mise à jour RC — agents + greffier.
+    CDC §3 : cloisonnement par created_by — un agent ne voit que ses propres actes.
+    Le greffier a accès à tous les actes.
+    """
     permission_classes = [EstAgentOuGreffier]
-    queryset = RegistreChronologique.objects.select_related(
-        'ra', 'ra__ph', 'ra__pm', 'ra__sc', 'ra__localite',
-    ).prefetch_related(
-        'documents__type_doc',
-        'ra__gerants', 'ra__associes', 'ra__domaines',
-    ).all()
     serializer_class = RegistreChronologiqueDetailSerializer
+
+    def get_queryset(self):
+        """Cloisonnement : agents ne voient que leurs propres actes chronologiques."""
+        qs = RegistreChronologique.objects.select_related(
+            'ra', 'ra__ph', 'ra__pm', 'ra__sc', 'ra__localite',
+        ).prefetch_related(
+            'documents__type_doc',
+            'ra__gerants', 'ra__associes', 'ra__domaines',
+        )
+        return filtrer_par_auteur(qs, self.request.user)
 
 
 class ValiderRChronoView(APIView):

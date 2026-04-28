@@ -147,13 +147,18 @@ class RegistreBEDetail(generics.RetrieveUpdateAPIView):
     GET   /api/rbe/<pk>/   – detail
     PATCH /api/rbe/<pk>/   – partial update (brouillon/retourné seulement)
     Agents tribunal + greffier (CDC §3.2).
+    CDC §3 : cloisonnement par created_by — un agent ne voit que ses propres dossiers RBE.
     """
     permission_classes = [EstAgentTribunalOuGreffier]
-    queryset = RegistreBE.objects.select_related(
-        'ra', 'localite', 'entite', 'created_by', 'validated_by'
-    ).prefetch_related('beneficiaires', 'historique')
     serializer_class  = RegistreBEDetailSerializer
     http_method_names = ['get', 'patch', 'head', 'options']
+
+    def get_queryset(self):
+        """Cloisonnement : agents ne voient que leurs propres dossiers RBE."""
+        qs = RegistreBE.objects.select_related(
+            'ra', 'localite', 'entite', 'created_by', 'validated_by'
+        ).prefetch_related('beneficiaires', 'historique')
+        return filtrer_par_auteur(qs, self.request.user)
 
     @transaction.atomic
     def perform_update(self, serializer):
