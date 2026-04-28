@@ -294,9 +294,20 @@ class ValiderRAView(APIView):
         ra.date_immatriculation = ra.date_immatriculation or timezone.now().date()
         ra.save(update_fields=['numero_ra', 'statut', 'validated_at', 'validated_by', 'date_immatriculation'])
 
-        # Valider aussi le RC chrono lié
+        # Valider aussi le RC chrono lié — quel que soit son statut courant.
+        # Cas couverts :
+        #   • EN_INSTANCE  : agent a envoyé le RC via EnvoyerRChronoView (flux standard)
+        #   • BROUILLON    : agent a envoyé le RA directement via EnvoyerRAView sans
+        #                    passer par EnvoyerRChronoView (flux alternatif légitime)
+        #   • RETOURNE     : greffier avait retourné le RC, puis valide le RA sans attendre
+        #                    la re-soumission (cas exceptionnel)
+        # Sans cette correction, les RCs en BROUILLON restaient indéfiniment BROUILLON
+        # après immatriculation, et n'apparaissaient jamais dans le filtre « Validé »
+        # de l'agent — bug bloquant signalé le 2026-04-28.
         RegistreChronologique.objects.filter(
-            ra=ra, type_acte='IMMATRICULATION', statut='EN_INSTANCE'
+            ra=ra,
+            type_acte='IMMATRICULATION',
+            statut__in=('BROUILLON', 'EN_INSTANCE', 'RETOURNE'),
         ).update(statut='VALIDE', validated_at=timezone.now(), validated_by=request.user)
 
         ActionHistorique.objects.create(
