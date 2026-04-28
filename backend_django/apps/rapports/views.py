@@ -1797,7 +1797,7 @@ class CertificatChronologiqueView(PdfAuditMixin, APIView):
                         status=http_status.HTTP_403_FORBIDDEN,
                     )
                 ok, err_resp = _verifier_autorisation_impression(
-                    request, 'RA', rc.ra_id, 'EXTRAIT_RA'
+                    request, 'RA', rc.ra_id
                 )
                 if not ok:
                     statut_display = dict(RegistreChronologique.STATUT_CHOICES).get(rc.statut, rc.statut)
@@ -2189,7 +2189,7 @@ class CertificatChronologiqueView(PdfAuditMixin, APIView):
 
 # ── Extrait d'immatriculation au registre du commerce (RA) ────────────────────
 
-def _verifier_autorisation_impression(request, type_dossier, dossier_id, document_type):
+def _verifier_autorisation_impression(request, type_dossier, dossier_id, document_type=None):
     """
     Vérifie qu'un agent (non-greffier) possède une autorisation d'impression valide.
 
@@ -2198,18 +2198,26 @@ def _verifier_autorisation_impression(request, type_dossier, dossier_id, documen
       2. Autorisation globale   (IMPRESSION_GLOBALE, 24h) — uniquement si
          l'agent est le créateur du RA demandé.
 
+    Règle RCCM : une autorisation IMPRESSION accordée par le greffier pour un RA
+    couvre TOUS les documents officiels de ce RA (extrait, certificat, attestation).
+    Le paramètre document_type est conservé pour compatibilité mais n'est plus
+    utilisé comme filtre au niveau 1 — il est uniquement informatif dans la
+    DemandeAutorisation (visible du greffier lors de la décision).
+
     Retourne (True, None) si autorisé, (False, Response 403) sinon.
     """
     from apps.autorisations.models import DemandeAutorisation
     now = _tz.now()
 
     # ── 1. Autorisation unitaire ──────────────────────────────────────────────
+    # document_type non filtré : toute autorisation IMPRESSION active pour ce RA
+    # couvre l'ensemble des documents officiels (extrait RC, certificat chrono,
+    # attestation d'immatriculation), quel que soit le type de document demandé.
     auth_unitaire = DemandeAutorisation.objects.filter(
         demandeur=request.user,
         type_demande='IMPRESSION',
         type_dossier=type_dossier,
         dossier_id=dossier_id,
-        document_type=document_type,
         statut='AUTORISEE',
         date_expiration__gt=now,
     ).order_by('-date_decision').first()
@@ -2279,7 +2287,7 @@ class AttestationImmatriculationView(PdfAuditMixin, APIView):
     def get(self, request, ra_id):
         if not est_greffier(request.user):
             ok, err_resp = _verifier_autorisation_impression(
-                request, 'RA', ra_id, 'EXTRAIT_RA'
+                request, 'RA', ra_id
             )
             if not ok:
                 return err_resp
@@ -2430,7 +2438,7 @@ class ExtraitRCView(PdfAuditMixin, APIView):
     def get(self, request, ra_id):
         if not est_greffier(request.user):
             ok, err_resp = _verifier_autorisation_impression(
-                request, 'RA', ra_id, 'EXTRAIT_RC_COMPLET'
+                request, 'RA', ra_id
             )
             if not ok:
                 return err_resp
