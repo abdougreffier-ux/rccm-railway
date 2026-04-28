@@ -1783,18 +1783,35 @@ class CertificatChronologiqueView(PdfAuditMixin, APIView):
 
         # ── Contrôle rôle × statut ────────────────────────────────────────────
         if not est_greffier(request.user):
-            # L'agent ne peut imprimer que si le dossier est encore entre ses mains
             if rc.statut not in self._STATUTS_AGENT_AUTORISES:
-                statut_display = dict(RegistreChronologique.STATUT_CHOICES).get(rc.statut, rc.statut)
-                return Response(
-                    {
-                        'detail':    f"Le certificat ne peut pas être imprimé après transmission au greffier. "
-                                     f"Statut actuel : « {statut_display} ».",
-                        'detail_ar': f"لا يمكن طباعة الشهادة بعد إرسالها إلى كاتب الضبط. "
-                                     f"الحالة الحالية : « {statut_display} ».",
-                    },
-                    status=http_status.HTTP_403_FORBIDDEN,
+                # Le dossier a été transmis : l'agent doit disposer d'une autorisation
+                # d'impression active accordée par le greffier (IMPRESSION ou IMPRESSION_GLOBALE).
+                # Règle métier : le contenu du certificat est strictement identique
+                # quel que soit le rôle ; seul le droit d'imprimer diffère.
+                if not rc.ra_id:
+                    return Response(
+                        {
+                            'detail':    "Ce dossier chronologique n'est pas lié à un registre analytique.",
+                            'detail_ar': 'هذا السجل الزمني غير مرتبط بسجل تحليلي.',
+                        },
+                        status=http_status.HTTP_403_FORBIDDEN,
+                    )
+                ok, err_resp = _verifier_autorisation_impression(
+                    request, 'RA', rc.ra_id, 'EXTRAIT_RA'
                 )
+                if not ok:
+                    statut_display = dict(RegistreChronologique.STATUT_CHOICES).get(rc.statut, rc.statut)
+                    return Response(
+                        {
+                            'detail':    f"Le certificat ne peut pas être imprimé après transmission "
+                                         f"au greffier sans autorisation d'impression valide. "
+                                         f"Statut actuel : « {statut_display} ».",
+                            'detail_ar': f"لا يمكن طباعة الشهادة بعد إرسالها إلى كاتب الضبط "
+                                         f"دون إذن طباعة ساري المفعول. "
+                                         f"الحالة الحالية : « {statut_display} ».",
+                        },
+                        status=http_status.HTTP_403_FORBIDDEN,
+                    )
 
         ra         = rc.ra
         signataire = _get_signataire()
