@@ -855,12 +855,14 @@ export const historiqueAPI = {
 
 // ── Demandes d'autorisation (impression / correction post-validation) ─────────
 export const autorisationAPI = {
-  list:      (params)        => api.get('/autorisations/', { params }),
-  get:       (id)            => api.get(`/autorisations/${id}/`),
-  create:    (data)          => api.post('/autorisations/', data),
-  verifier:  (params)        => api.get('/autorisations/verifier/', { params }),
-  autoriser: (id, data = {}) => api.post(`/autorisations/${id}/autoriser/`, data),
-  refuser:   (id, data = {}) => api.post(`/autorisations/${id}/refuser/`, data),
+  list:         (params)        => api.get('/autorisations/', { params }),
+  get:          (id)            => api.get(`/autorisations/${id}/`),
+  create:       (data)          => api.post('/autorisations/', data),
+  verifier:     (params)        => api.get('/autorisations/verifier/', { params }),
+  autoriser:    (id, data = {}) => api.post(`/autorisations/${id}/autoriser/`, data),
+  refuser:      (id, data = {}) => api.post(`/autorisations/${id}/refuser/`, data),
+  // Recherche un RC par (numero_chrono + annee) — étape 1 du modal "Demander autorisation"
+  rechercherRC: (params)        => api.get('/autorisations/rechercher-rc/', { params }),
 };
 
 // ── Certificats greffier (non faillite, non litige, etc.) ────────────────────

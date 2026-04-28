@@ -103,6 +103,36 @@ class EstAgentTribunalOuGreffier(BasePermission):
         return get_role(request.user) in (ROLE_GREFFIER, ROLE_AGENT_TRIBUNAL)
 
 
+def get_authorized_ra_ids(user):
+    """
+    Retourne la liste des PK de RegistreAnalytique pour lesquels l'agent
+    possède une autorisation active :
+      • CORRECTION : permanente (pas d'expiration)
+      • IMPRESSION  : non expirée (expiration dans date_expiration)
+
+    Import de DemandeAutorisation fait en différé pour éviter les imports
+    circulaires (apps.autorisations ← apps.core ← apps.registres).
+
+    Retourne une liste vide pour le greffier (inutile — il voit tout).
+    """
+    if est_greffier(user):
+        return []
+    from apps.autorisations.models import DemandeAutorisation
+    from django.db.models import Q
+    from django.utils import timezone as _tz
+    now = _tz.now()
+    return list(
+        DemandeAutorisation.objects.filter(
+            demandeur=user,
+            type_dossier='RA',
+            statut='AUTORISEE',
+        ).filter(
+            Q(type_demande='CORRECTION') |
+            Q(type_demande='IMPRESSION', date_expiration__gt=now)
+        ).values_list('dossier_id', flat=True)
+    )
+
+
 class LectureAgentModifGreffier(BasePermission):
     """
     Lecture autorisée pour tout le personnel (données de référence = listes déroulantes).

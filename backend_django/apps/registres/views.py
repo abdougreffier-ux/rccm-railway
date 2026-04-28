@@ -14,7 +14,7 @@ from .serializers import (
 )
 from apps.core.permissions import (
     EstAgentOuGreffier, EstAgentTribunalOuGreffier, EstGreffier,
-    est_greffier, est_agent_gu, filtrer_par_auteur,
+    est_greffier, est_agent_gu, filtrer_par_auteur, get_authorized_ra_ids,
 )
 
 
@@ -109,7 +109,17 @@ class RegistreAnalytiqueListCreate(generics.ListAPIView):
               .select_related('ph', 'pm', 'pm__forme_juridique', 'sc', 'localite', 'created_by')
               .prefetch_related('chronos')
               .all())
-        return filtrer_par_auteur(qs, self.request.user)
+        if est_greffier(self.request.user):
+            return qs
+        # Pour les agents : dossiers propres + dossiers autorisés par le greffier
+        # (DemandeAutorisation CORRECTION ou IMPRESSION non expirée).
+        from django.db.models import Q
+        authorized_ids = get_authorized_ra_ids(self.request.user)
+        if authorized_ids:
+            return qs.filter(
+                Q(created_by=self.request.user) | Q(pk__in=authorized_ids)
+            )
+        return qs.filter(created_by=self.request.user)
 
 
 class RegistreAnalytiqueDetail(generics.RetrieveUpdateAPIView):
@@ -391,8 +401,19 @@ class RegistreChronologiqueListCreate(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = RegistreChronologique.objects.select_related('ra').all()
-        # Filtre propriétaire : agents ne voient que leurs propres dossiers
-        qs = filtrer_par_auteur(qs, self.request.user)
+
+        # ── Cloisonnement + autorisations ─────────────────────────────────────
+        # Agents : dossiers propres (created_by) + dossiers dont le RA a été
+        # autorisé par le greffier via DemandeAutorisation.
+        if not est_greffier(self.request.user):
+            from django.db.models import Q
+            authorized_ra_ids = get_authorized_ra_ids(self.request.user)
+            if authorized_ra_ids:
+                qs = qs.filter(
+                    Q(created_by=self.request.user) | Q(ra_id__in=authorized_ra_ids)
+                )
+            else:
+                qs = qs.filter(created_by=self.request.user)
 
         p  = self.request.query_params
 

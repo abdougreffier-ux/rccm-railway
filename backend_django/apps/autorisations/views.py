@@ -261,6 +261,95 @@ class RefuserView(APIView):
         )
 
 
+class RechercherRCView(APIView):
+    """
+    GET /autorisations/rechercher-rc/?numero_chrono=0001&annee=2024
+
+    Recherche un RC par numéro chronologique (obligatoire) et année (optionnel).
+    Utilisé par les agents pour identifier le RA cible avant de soumettre une
+    demande d'autorisation (impression ou correction) sur un dossier qui ne
+    leur appartient pas.
+
+    Retourne uniquement les champs de présentation (denomination, statut…),
+    pas les données confidentielles (description JSON, observations internes…).
+    """
+    permission_classes = [EstAgentOuGreffier]
+
+    def get(self, request):
+        numero_raw = request.query_params.get('numero_chrono', '').strip()
+        annee_raw  = request.query_params.get('annee', '').strip()
+
+        if not numero_raw:
+            return Response(
+                {
+                    'detail':    'Le numéro chronologique est requis.',
+                    'detail_ar': 'رقم السجل الزمني مطلوب.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Normalisation du numéro ───────────────────────────────────────────
+        # "1" et "0001" désignent le même enregistrement ; on cale sur 4 chiffres
+        # minimum (même format que _next_numero_chrono dans registres/views.py).
+        try:
+            num_int = int(numero_raw)
+            if num_int <= 0:
+                raise ValueError('doit être positif')
+            num_str = str(num_int).zfill(4)
+        except ValueError:
+            return Response(
+                {
+                    'detail':    'Numéro chronologique invalide (entier positif attendu).',
+                    'detail_ar': 'رقم السجل الزمني غير صالح (يُتوقع عدد صحيح موجب).',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Recherche ─────────────────────────────────────────────────────────
+        from apps.registres.models import RegistreChronologique
+        qs = RegistreChronologique.objects.select_related(
+            'ra', 'ra__ph', 'ra__pm', 'ra__sc',
+        ).filter(numero_chrono=num_str)
+
+        if annee_raw:
+            try:
+                qs = qs.filter(date_acte__year=int(annee_raw))
+            except ValueError:
+                pass  # annee invalide → ignorée (la recherche continue sans filtre année)
+
+        rc = qs.first()
+        if rc is None:
+            return Response(
+                {
+                    'detail':    'Aucun dossier trouvé pour ce numéro chronologique.',
+                    'detail_ar': 'لم يتم العثور على أي ملف لهذا الرقم الزمني.',
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if rc.ra is None:
+            return Response(
+                {
+                    'detail':    "Ce dossier chronologique n'est pas lié à un registre analytique.",
+                    'detail_ar': 'هذا السجل الزمني غير مرتبط بسجل تحليلي.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ra = rc.ra
+        return Response({
+            'rc_id':         rc.pk,
+            'ra_id':         rc.ra_id,
+            'numero_chrono': rc.numero_chrono,
+            'numero_ra':     ra.numero_ra,
+            'type_acte':     rc.type_acte,
+            'date_acte':     rc.date_acte,
+            'statut_rc':     rc.statut,
+            'statut_ra':     ra.statut,
+            'denomination':  ra.denomination,
+        })
+
+
 class VerifierAutorisationView(APIView):
     """
     GET /autorisations/verifier/?type_demande=IMPRESSION&type_dossier=RA&dossier_id=123

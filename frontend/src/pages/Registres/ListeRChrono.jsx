@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Table, Typography, Tag, Input, Select, Space, Button, Tooltip, message, Alert, Badge, Avatar, Modal } from 'antd';
+import { Table, Typography, Tag, Input, InputNumber, Select, Space, Button, Tooltip, message, Alert, Badge, Avatar, Modal, Checkbox } from 'antd';
 import {
   FilePdfOutlined, PrinterOutlined, PlusOutlined,
   EyeOutlined, EditOutlined, SendOutlined,
   WarningOutlined, InfoCircleOutlined, LockOutlined,
-  ClockCircleOutlined, CheckCircleOutlined,
+  ClockCircleOutlined, CheckCircleOutlined, SearchOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -36,10 +36,20 @@ const ListeRChrono = () => {
   const [search,       setSearch]       = useState('');
   const [statut,       setStatut]       = useState('');
   const [page,         setPage]         = useState(1);
-  // ── Modal demande de correction ──────────────────────────────────────────
+  // ── Modal demande de correction (per-row, dossier propre VALIDE) ─────────
   const [corrModal,    setCorrModal]    = useState(false);
   const [corrRaId,     setCorrRaId]     = useState(null);
   const [corrMotif,    setCorrMotif]    = useState('');
+  // ── Modal demande d'autorisation (dossier d'un autre agent) ─────────────
+  const [authModal,        setAuthModal]        = useState(false);
+  const [authStep,         setAuthStep]         = useState(1); // 1=recherche  2=confirmation
+  const [authAnnee,        setAuthAnnee]        = useState(new Date().getFullYear());
+  const [authNumero,       setAuthNumero]       = useState('');
+  const [authFindResult,   setAuthFindResult]   = useState(null);
+  const [authFindError,    setAuthFindError]    = useState('');
+  const [authFindLoading,  setAuthFindLoading]  = useState(false);
+  const [authTypesChecked, setAuthTypesChecked] = useState(['CORRECTION']); // CORRECTION / IMPRESSION
+  const [authMotif,        setAuthMotif]        = useState('');
 
   const queryClient = useQueryClient();
   const navigate    = useNavigate();
@@ -136,6 +146,88 @@ const ListeRChrono = () => {
       return;
     }
     demandeCorMut.mutate({ type_demande: 'CORRECTION', type_dossier: 'RA', dossier_id: Number(corrRaId), motif: corrMotif });
+  };
+
+  // ── Mutation : demande d'autorisation sur dossier d'un autre agent ───────
+  const demandeAuthMut = useMutation({
+    mutationFn: async ({ ra_id, types, motif }) => {
+      // Crée une DemandeAutorisation par type sélectionné (CORRECTION et/ou IMPRESSION)
+      const promises = types.map(type_demande =>
+        autorisationAPI.create({
+          type_demande,
+          type_dossier:  'RA',
+          dossier_id:    Number(ra_id),
+          document_type: type_demande === 'IMPRESSION' ? 'EXTRAIT_RA' : '',
+          motif,
+        })
+      );
+      return Promise.all(promises);
+    },
+    onSuccess: () => {
+      message.success(isAr
+        ? 'تم إرسال طلب الإذن إلى كاتب الضبط بنجاح.'
+        : 'Demande d\'autorisation envoyée au greffier avec succès.');
+      setAuthModal(false);
+      setAuthStep(1);
+      setAuthAnnee(new Date().getFullYear());
+      setAuthNumero('');
+      setAuthFindResult(null);
+      setAuthFindError('');
+      setAuthTypesChecked(['CORRECTION']);
+      setAuthMotif('');
+      refetchMyAuths();
+      queryClient.invalidateQueries({ queryKey: ['rchrono'] });
+    },
+    onError: (e) => message.error(e.response?.data?.detail || t('msg.error')),
+  });
+
+  // Ferme proprement le modal auth (réinitialise tout)
+  const closeAuthModal = () => {
+    setAuthModal(false);
+    setAuthStep(1);
+    setAuthFindResult(null);
+    setAuthFindError('');
+    setAuthNumero('');
+    setAuthMotif('');
+    setAuthTypesChecked(['CORRECTION']);
+  };
+
+  // Étape 1 : recherche RC par (année + N° chrono)
+  const rechercherRC = async () => {
+    if (!authNumero || !String(authNumero).trim()) {
+      setAuthFindError(isAr ? 'رقم السجل الزمني مطلوب.' : 'N° chronologique requis.');
+      return;
+    }
+    setAuthFindLoading(true);
+    setAuthFindError('');
+    setAuthFindResult(null);
+    try {
+      const res = await autorisationAPI.rechercherRC({
+        numero_chrono: String(authNumero).trim(),
+        annee:         authAnnee,
+      });
+      setAuthFindResult(res.data);
+      setAuthStep(2);
+    } catch (e) {
+      const detail = e.response?.data?.detail
+        || (isAr ? 'حدث خطأ أثناء البحث.' : 'Erreur lors de la recherche.');
+      setAuthFindError(detail);
+    } finally {
+      setAuthFindLoading(false);
+    }
+  };
+
+  // Étape 2 : soumettre la demande
+  const submitAuth = () => {
+    if (!authTypesChecked.length) {
+      message.warning(isAr ? 'اختر نوع الإذن.' : 'Sélectionnez au moins un type d\'autorisation.');
+      return;
+    }
+    if (!authMotif.trim()) {
+      message.warning(isAr ? 'السبب مطلوب.' : 'Le motif est obligatoire.');
+      return;
+    }
+    demandeAuthMut.mutate({ ra_id: authFindResult.ra_id, types: authTypesChecked, motif: authMotif });
   };
 
   const STATUT_LABELS = {
@@ -324,6 +416,19 @@ const ListeRChrono = () => {
             style={{ background: '#1a4480' }}>
             {t('rc.new')}
           </Button>
+          {/* Demander autorisation — agent uniquement, pour accéder à un dossier d'un autre agent */}
+          {isAgent && (
+            <Tooltip title={isAr
+              ? 'طلب إذن للوصول إلى ملف لم تقم بإنشائه (تصحيح أو طباعة)'
+              : 'Demander au greffier l\'accès à un dossier ne vous appartenant pas'}>
+              <Button
+                icon={<LockOutlined />}
+                onClick={() => { setAuthModal(true); setAuthStep(1); setAuthFindResult(null); setAuthFindError(''); }}
+              >
+                {isAr ? 'طلب إذن' : 'Demander autorisation'}
+              </Button>
+            </Tooltip>
+          )}
           {!isAgentGU && (
             <Button icon={<FilePdfOutlined />}
               onClick={() => openPDF(rapportAPI.registreChronologiquePDF({}))}>
@@ -487,6 +592,149 @@ const ListeRChrono = () => {
           showCount
           maxLength={500}
         />
+      </Modal>
+
+      {/* ── Modal : demande d'autorisation (accès à un dossier d'un autre agent) ── */}
+      <Modal
+        title={`🔓 ${isAr ? 'طلب إذن الوصول إلى ملف' : 'Demander l\'accès à un dossier'}`}
+        open={authModal}
+        onCancel={closeAuthModal}
+        footer={null}
+        width={520}
+        destroyOnClose
+      >
+        {/* ── Étape 1 : recherche par (année + N° chrono) ─────────────────── */}
+        {authStep === 1 && (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Alert
+              type="info"
+              showIcon
+              message={isAr
+                ? 'أدخل رقم السجل الزمني وسنة الإنشاء للوصول إلى ملف لم تقم بإنشائه.'
+                : 'Saisissez le N° chronologique et l\'année pour accéder à un dossier ne vous appartenant pas.'}
+            />
+            <Space align="end" wrap>
+              <div>
+                <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>
+                  {isAr ? 'السنة' : 'Année'}
+                </div>
+                <InputNumber
+                  value={authAnnee}
+                  onChange={v => setAuthAnnee(v)}
+                  min={2000} max={2100}
+                  style={{ width: 110 }}
+                />
+              </div>
+              <div>
+                <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>
+                  {isAr ? 'رقم السجل الزمني' : 'N° chronologique'}
+                </div>
+                <Input
+                  value={authNumero}
+                  onChange={e => { setAuthNumero(e.target.value); setAuthFindError(''); }}
+                  placeholder={isAr ? 'مثال: 0001' : 'Ex : 0001'}
+                  style={{ width: 130 }}
+                  onPressEnter={rechercherRC}
+                />
+              </div>
+              <Button
+                type="primary"
+                icon={<SearchOutlined />}
+                onClick={rechercherRC}
+                loading={authFindLoading}
+              >
+                {isAr ? 'بحث' : 'Rechercher'}
+              </Button>
+            </Space>
+            {authFindError && <Alert type="error" message={authFindError} showIcon />}
+          </Space>
+        )}
+
+        {/* ── Étape 2 : confirmation + choix des types + motif ────────────── */}
+        {authStep === 2 && authFindResult && (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+
+            {/* Récapitulatif du dossier trouvé */}
+            <div style={{
+              background: '#f0f5ff', border: '1px solid #adc6ff',
+              borderRadius: 6, padding: '10px 14px',
+            }}>
+              <div style={{ fontWeight: 600, marginBottom: 8, color: '#1a4480' }}>
+                {isAr ? '✅ الملف المحدد' : '✅ Dossier identifié'}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '4px 0', fontSize: 13 }}>
+                <span style={{ color: '#8c8c8c' }}>{isAr ? 'رقم الزمني' : 'N° chrono'}</span>
+                <span style={{ fontWeight: 600 }}>{authFindResult.numero_chrono}</span>
+                <span style={{ color: '#8c8c8c' }}>{isAr ? 'رقم التحليلي' : 'N° analytique'}</span>
+                <span>{authFindResult.numero_ra || '—'}</span>
+                <span style={{ color: '#8c8c8c' }}>{isAr ? 'المسمى التجاري' : 'Dénomination'}</span>
+                <span style={{ fontWeight: 500 }}>{authFindResult.denomination || '—'}</span>
+                <span style={{ color: '#8c8c8c' }}>{isAr ? 'حالة السجل الزمني' : 'Statut RC'}</span>
+                <Tag color={STATUT_COLOR[authFindResult.statut_rc]} style={{ margin: 0, width: 'fit-content' }}>
+                  {STATUT_LABELS[authFindResult.statut_rc] || authFindResult.statut_rc}
+                </Tag>
+              </div>
+            </div>
+
+            {/* Types d'autorisation demandés */}
+            <div>
+              <div style={{ marginBottom: 8, fontWeight: 500 }}>
+                {isAr ? 'نوع الإذن المطلوب *' : 'Type(s) d\'autorisation souhaité(s) *'}
+              </div>
+              <Space direction="vertical" size={4}>
+                <Checkbox
+                  checked={authTypesChecked.includes('CORRECTION')}
+                  onChange={e => setAuthTypesChecked(prev =>
+                    e.target.checked ? [...prev, 'CORRECTION'] : prev.filter(t => t !== 'CORRECTION')
+                  )}
+                >
+                  ✏️ {isAr ? 'تصحيح / تعديل الملف' : 'Correction / Modification du dossier'}
+                </Checkbox>
+                <Checkbox
+                  checked={authTypesChecked.includes('IMPRESSION')}
+                  onChange={e => setAuthTypesChecked(prev =>
+                    e.target.checked ? [...prev, 'IMPRESSION'] : prev.filter(t => t !== 'IMPRESSION')
+                  )}
+                >
+                  🖨️ {isAr ? 'طباعة مستخرج السجل التحليلي' : 'Impression d\'extrait du registre analytique'}
+                </Checkbox>
+              </Space>
+            </div>
+
+            {/* Motif de la demande */}
+            <div>
+              <div style={{ marginBottom: 4, fontWeight: 500 }}>
+                {isAr ? 'سبب الطلب' : 'Motif de la demande'}{' '}
+                <span style={{ color: '#ff4d4f' }}>*</span>
+              </div>
+              <Input.TextArea
+                value={authMotif}
+                onChange={e => setAuthMotif(e.target.value)}
+                rows={3}
+                placeholder={isAr
+                  ? 'اذكر سبب طلب الإذن بإيجاز...'
+                  : 'Indiquez brièvement le motif de votre demande d\'autorisation...'}
+                maxLength={500}
+                showCount
+              />
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <Button onClick={() => { setAuthStep(1); setAuthFindResult(null); setAuthFindError(''); }}>
+                {isAr ? '← رجوع' : '← Retour'}
+              </Button>
+              <Button
+                type="primary"
+                loading={demandeAuthMut.isPending}
+                disabled={!authTypesChecked.length || !authMotif.trim()}
+                onClick={submitAuth}
+              >
+                {isAr ? 'إرسال الطلب إلى كاتب الضبط' : 'Envoyer la demande au greffier'}
+              </Button>
+            </div>
+          </Space>
+        )}
       </Modal>
 
       {/* ── Tableau ──────────────────────────────────────────────────────────── */}
