@@ -116,14 +116,18 @@ class DemandeAutorisationListCreate(APIView):
             if statut_filtre:
                 qs = qs.filter(statut=statut_filtre)
 
-        # Filtres communs (type_dossier / dossier_id) — disponibles pour les deux rôles
-        # Utilisés notamment par DetailRChrono (greffier) pour afficher les demandes d'un RA précis
+        # Filtres communs — disponibles pour les deux rôles
+        # type_dossier / dossier_id : utilisés par DetailRChrono (greffier)
+        # type_demande  : utilisé par DetailRA (agent) pour récupérer IMPRESSION_GLOBALE
         type_dossier = request.query_params.get('type_dossier')
         dossier_id   = request.query_params.get('dossier_id')
+        type_demande = request.query_params.get('type_demande')
         if type_dossier:
             qs = qs.filter(type_dossier=type_dossier)
         if dossier_id:
             qs = qs.filter(dossier_id=dossier_id)
+        if type_demande:
+            qs = qs.filter(type_demande=type_demande)
 
         return Response(DemandeAutorisationSerializer(qs, many=True).data)
 

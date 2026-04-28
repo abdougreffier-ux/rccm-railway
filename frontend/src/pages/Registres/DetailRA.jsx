@@ -295,7 +295,7 @@ const DetailRA = () => {
     refetchInterval: 30_000,
   });
 
-  // ── Demandes en cours (agent) ──────────────────────────────────────────────
+  // ── Demandes en cours (agent) — autorisations spécifiques à ce dossier ───────
   const { data: mesDemandes = [], refetch: refetchDemandes } = useQuery({
     queryKey: ['mes-autorisations', 'RA', id],
     queryFn:  () => autorisationAPI.list({ type_dossier: 'RA', dossier_id: id }).then(r => r.data),
@@ -304,6 +304,18 @@ const DetailRA = () => {
   });
   const getDemande = (typeDemande, docType) =>
     mesDemandes.find(d => d.type_demande === typeDemande && (!docType || d.document_type === docType));
+
+  // ── Autorisation globale 24h (IMPRESSION_GLOBALE, dossier_id=0 sentinelle) ──
+  // Cette autorisation couvre tous les RA créés par l'agent ; elle n'apparaît
+  // pas dans mesDemandes (filtrée par dossier_id=<id>) — requête séparée.
+  const { data: globalAuths = [] } = useQuery({
+    queryKey: ['mes-autorisations-globales', 'RA'],
+    queryFn:  () => autorisationAPI.list({ type_demande: 'IMPRESSION_GLOBALE', type_dossier: 'RA' })
+                      .then(r => r.data),
+    enabled:  isAgent,
+    refetchInterval: 30_000,
+  });
+  const globalImpAuth = globalAuths.find(a => a.statut === 'AUTORISEE' && a.est_valide) || null;
 
   // ── Créer une demande d'autorisation ──────────────────────────────────────
   const creerDemandeMut = useMutation({
@@ -1177,20 +1189,38 @@ const DetailRA = () => {
             const dExtraitRC  = getDemande('IMPRESSION', 'EXTRAIT_RC_COMPLET');
             const dCorrection = getDemande('CORRECTION');
 
-            // Bouton d'impression contrôlé par autorisation greffier
+            // Bouton d'impression contrôlé par autorisation greffier.
+            // Deux niveaux d'autorisation reconnus (miroir du backend) :
+            //   1. Autorisation unitaire IMPRESSION (20 min, dossier précis)
+            //   2. Autorisation globale IMPRESSION_GLOBALE (24h, tous dossiers de l'agent)
             const AuthButton = ({ demande, docType, label, icon }) => {
-              const isAutorisee = demande?.statut === 'AUTORISEE' &&
+              // Niveau 1 : autorisation spécifique non expirée
+              const isAutoriseeUnitaire = demande?.statut === 'AUTORISEE' &&
                 demande?.date_expiration && new Date(demande.date_expiration) > new Date();
-              const isEnAttente = demande?.statut === 'EN_ATTENTE';
-              const isRefusee   = demande?.statut === 'REFUSEE';
+              // Niveau 2 : autorisation globale 24h active (couvre les dossiers créés par l'agent)
+              const isAutoriseeGlobale  = !isAutoriseeUnitaire && !!globalImpAuth;
+              const isAutorisee         = isAutoriseeUnitaire || isAutoriseeGlobale;
+
+              const isEnAttente = !isAutorisee && demande?.statut === 'EN_ATTENTE';
+              const isRefusee   = !isAutorisee && demande?.statut === 'REFUSEE';
 
               // ✅ Autorisé : impression directe avec compte à rebours
               if (isAutorisee) {
-                const mins = Math.max(0, Math.round(
-                  (new Date(demande.date_expiration) - new Date()) / 60000
-                ));
+                // Calcul des minutes restantes selon le niveau d'autorisation actif
+                let mins = null;
+                if (isAutoriseeUnitaire && demande?.date_expiration) {
+                  mins = Math.max(0, Math.round(
+                    (new Date(demande.date_expiration) - new Date()) / 60000
+                  ));
+                } else if (isAutoriseeGlobale) {
+                  mins = globalImpAuth?.minutes_restantes ?? null;
+                }
+                const minsLabel = mins !== null ? ` (${mins}min)` : '';
+                const tooltipSuffix = mins !== null
+                  ? `${mins} min`
+                  : (isAr ? 'إذن عام 24 ساعة' : 'Autorisation globale 24h');
                 return (
-                  <Tooltip title={`${isAr ? 'مقبول — ' : 'Autorisé — '}${mins} min`}>
+                  <Tooltip title={`${isAr ? 'مقبول — ' : 'Autorisé — '}${tooltipSuffix}`}>
                     <Button icon={<UnlockOutlined />}
                       style={{ borderColor: '#389e0d', color: '#389e0d' }}
                       onClick={() => openPDF(
@@ -1199,7 +1229,7 @@ const DetailRA = () => {
                           : rapportAPI.extraitRC(id)
                       )}>
                       {label}
-                      <small style={{ marginLeft: 4, opacity: 0.7 }}>({mins}min)</small>
+                      {minsLabel && <small style={{ marginLeft: 4, opacity: 0.7 }}>{minsLabel}</small>}
                     </Button>
                   </Tooltip>
                 );
