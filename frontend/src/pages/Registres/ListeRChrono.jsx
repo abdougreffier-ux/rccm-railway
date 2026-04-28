@@ -192,7 +192,7 @@ const ListeRChrono = () => {
           type_demande,
           type_dossier:  'RA',
           dossier_id:    Number(ra_id),
-          document_type: type_demande === 'IMPRESSION' ? 'EXTRAIT_RA' : '',
+          document_type: type_demande === 'IMPRESSION' ? 'EXTRAIT_RC_COMPLET' : '',
           motif,
         })
       );
@@ -410,10 +410,10 @@ const ListeRChrono = () => {
                   onClick={() => openPDF(rapportAPI.certificatChronologique(r.id))} />
               </Tooltip>
               {r.ra && (
-                <Tooltip title={isAr ? 'مستخرج التسجيل التحليلي' : 'Extrait RA'}>
+                <Tooltip title={isAr ? 'مستخرج التسجيل التحليلي الكامل' : 'Extrait RC complet'}>
                   <Button size="small" icon={<FilePdfOutlined />}
                     style={{ color: '#52c41a', borderColor: '#52c41a' }}
-                    onClick={() => openPDF(rapportAPI.attestationImmatriculation(r.ra))} />
+                    onClick={() => openPDF(rapportAPI.extraitRC(r.ra))} />
                 </Tooltip>
               )}
             </>
