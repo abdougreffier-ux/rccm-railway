@@ -385,10 +385,16 @@ class RegistreChronologiqueListCreate(generics.ListCreateAPIView):
 
         p  = self.request.query_params
 
-        # Filtre statut — accepte n'importe quelle valeur (pas de validation choices)
+        # Filtre statut — accepte une valeur simple OU une liste séparée par virgule.
+        # Exemple mono-valeur : ?statut=VALIDE
+        # Exemple multi-valeur : ?statut=BROUILLON,RETOURNE  (bouton "À traiter")
         statut = p.get('statut', '').strip()
         if statut:
-            qs = qs.filter(statut=statut)
+            statuts = [s.strip() for s in statut.split(',') if s.strip()]
+            if len(statuts) > 1:
+                qs = qs.filter(statut__in=statuts)
+            else:
+                qs = qs.filter(statut=statuts[0])
 
         # Filtre type_acte
         type_acte = p.get('type_acte', '').strip()

@@ -409,8 +409,8 @@ const ListeRChrono = () => {
           style={{ width: 350 }} allowClear />
         <Select
           placeholder={t('field.statut')}
-          value={statut || undefined}
-          onChange={v => { setStatut(v || ''); setPage(1); }}
+          value={statut && statut !== 'BROUILLON,RETOURNE' ? statut : undefined}
+          onChange={v => { setStatut(v || ''); setPage(1); }}   // sélection manuelle → remplace le mode "À traiter"
           allowClear style={{ width: 210 }}
           options={[
             {
@@ -432,17 +432,18 @@ const ListeRChrono = () => {
             { value: 'ANNULE',  label: t('status.annule') },
           ]}
         />
-        {/* Raccourci : afficher uniquement les dossiers à traiter */}
+        {/* Raccourci : afficher brouillons ET retournés (tous les dossiers à traiter) */}
         <Button
-          type={statut === 'RETOURNE' || statut === 'BROUILLON' ? 'primary' : 'default'}
+          type={statut === 'BROUILLON,RETOURNE' ? 'primary' : 'default'}
           onClick={() => {
-            setStatut(statut === 'RETOURNE' ? '' : 'RETOURNE');
+            // Bascule : si déjà sur "À traiter" → tout afficher ; sinon → BROUILLON + RETOURNE
+            setStatut(statut === 'BROUILLON,RETOURNE' ? '' : 'BROUILLON,RETOURNE');
             setPage(1);
           }}
           icon={<WarningOutlined />}
           danger={nbRetournes > 0}
         >
-          À traiter
+          {isAr ? 'للمعالجة' : 'À traiter'}
           {(nbRetournes + nbBrouillons) > 0 && (
             <Badge
               count={nbRetournes + nbBrouillons}
@@ -496,6 +497,33 @@ const ListeRChrono = () => {
         loading={isLoading}
         scroll={{ x: 1050 }}
         rowClassName={ROW_CLASS}
+        locale={{
+          emptyText: (() => {
+            // Si un filtre est actif ET que l'agent a des enregistrements dans d'autres statuts
+            const totalAgent = (nbBrouillons || 0) + (nbRetournes || 0);
+            if (statut && totalAgent > 0) {
+              return (
+                <Space direction="vertical" align="center" style={{ padding: '24px 0' }}>
+                  <span style={{ color: '#8c8c8c', fontSize: 13 }}>
+                    {isAr
+                      ? 'لا توجد نتائج لهذا الفلتر.'
+                      : 'Aucun résultat pour ce filtre.'}
+                  </span>
+                  <Button
+                    size="small"
+                    type="link"
+                    onClick={() => { setStatut(''); setPage(1); }}
+                  >
+                    {isAr
+                      ? `عرض جميع سجلاتي (${totalAgent})`
+                      : `Voir tous mes enregistrements (${nbBrouillons + nbRetournes})`}
+                  </Button>
+                </Space>
+              );
+            }
+            return isAr ? 'لا توجد بيانات' : 'Aucune donnée';
+          })(),
+        }}
         pagination={{
           current:   page,
           pageSize:  20,
