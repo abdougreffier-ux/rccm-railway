@@ -4,6 +4,7 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import AppHeader from './AppHeader';
 import ErrorBoundary from '../ErrorBoundary/ErrorBoundary';
+import PdfViewerModal from '../PdfViewerModal';
 
 const { Content } = Layout;
 
@@ -31,6 +32,10 @@ const AppLayout = () => {
           </ErrorBoundary>
         </Content>
       </Layout>
+      {/* Visionneuse PDF intégrée — agents uniquement (api.js détecte le rôle).
+          Montée une seule fois au niveau du layout ; accessible depuis tout composant
+          via window.__rccmOpenPdfModal(blobUrl, filename). */}
+      <PdfViewerModal />
     </Layout>
   );
 };

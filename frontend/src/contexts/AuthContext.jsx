@@ -13,9 +13,13 @@ export const AuthProvider = ({ children }) => {
     try {
       const { data } = await authAPI.me();
       setUser(data);
+      // Flag utilisé par api.js (openPDF) pour choisir entre téléchargement
+      // (greffier) et affichage inline sans téléchargement (agents).
+      localStorage.setItem('user_is_greffier', data?.role?.code === 'GREFFIER' ? '1' : '0');
     } catch {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user_is_greffier');
     } finally {
       setLoading(false);
     }
@@ -27,6 +31,9 @@ export const AuthProvider = ({ children }) => {
     const { data } = await authAPI.login({ login, password });
     localStorage.setItem('access_token',  data.access);
     localStorage.setItem('refresh_token', data.refresh);
+    // Flag rôle persisté pour que api.js puisse détecter le comportement PDF
+    // sans accès au contexte React (openPDF est une fonction utilitaire pure).
+    localStorage.setItem('user_is_greffier', data.user?.role?.code === 'GREFFIER' ? '1' : '0');
     setUser(data.user);
     return data.user;
   };
@@ -36,7 +43,7 @@ export const AuthProvider = ({ children }) => {
       const refresh = localStorage.getItem('refresh_token');
       await authAPI.logout(refresh);
     } catch {}
-    localStorage.clear();
+    localStorage.clear(); // efface aussi user_is_greffier
     setUser(null);
   };
 

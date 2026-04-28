@@ -312,17 +312,39 @@ export const openPDF = async (path) => {
       filename  = seg.endsWith('.pdf') ? seg : `${seg}.pdf`;
     }
 
-    console.log('[PDF] ✓ téléchargement :', filename, '(', Math.round((Date.now() - t0) / 100) / 10, 's)');
-
     // resp.data est déjà un Blob (responseType: 'blob')
-    const blobUrl = URL.createObjectURL(resp.data);
-    const a       = document.createElement('a');
-    a.href        = blobUrl;
-    a.download    = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+    const blobUrl    = URL.createObjectURL(resp.data);
+    // ── Comportement selon le rôle ────────────────────────────────────────
+    // Greffier  → téléchargement local (historique).
+    // Agent     → affichage inline dans PdfViewerModal sans téléchargement.
+    //             Le flag est positionné par AuthContext.jsx à la connexion.
+    const isGrf = localStorage.getItem('user_is_greffier') === '1';
+
+    if (isGrf) {
+      // ── Greffier : téléchargement classique ─────────────────────────────
+      console.log('[PDF] ✓ téléchargement greffier :', filename, '(', Math.round((Date.now() - t0) / 100) / 10, 's)');
+      const a   = document.createElement('a');
+      a.href    = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+    } else {
+      // ── Agent : visionneuse intégrée, pas de téléchargement ─────────────
+      console.log('[PDF] ✓ visualisation agent :', filename, '(', Math.round((Date.now() - t0) / 100) / 10, 's)');
+      if (typeof window.__rccmOpenPdfModal === 'function') {
+        // PdfViewerModal monté dans AppLayout — affichage inline dans l'UI
+        window.__rccmOpenPdfModal(blobUrl, filename);
+      } else {
+        // Fallback si le composant modal n'est pas encore monté (rare)
+        const win = window.open('', '_blank');
+        if (win) {
+          win.location.href = blobUrl;
+        }
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      }
+    }
 
   } catch (e) {
     const elapsed = Date.now() - t0;
