@@ -192,8 +192,20 @@ class AutoriserView(APIView):
         demande.motif_decision = motif_decision
 
         if demande.type_demande == 'IMPRESSION':
+            # Autorisation unitaire : 20 minutes, dossier précis
             demande.date_expiration = now + timedelta(
                 minutes=DemandeAutorisation.EXPIRATION_IMPRESSION_MINUTES
+            )
+            demande.save()
+            return Response(
+                DemandeAutorisationSerializer(demande).data,
+                status=status.HTTP_200_OK,
+            )
+
+        elif demande.type_demande == 'IMPRESSION_GLOBALE':
+            # Autorisation globale : 24 heures, tous les dossiers créés par l'agent
+            demande.date_expiration = now + timedelta(
+                hours=DemandeAutorisation.EXPIRATION_IMPRESSION_GLOBALE_HEURES
             )
             demande.save()
             return Response(

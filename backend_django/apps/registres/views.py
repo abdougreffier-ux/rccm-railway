@@ -438,6 +438,16 @@ class RegistreChronologiqueListCreate(generics.ListCreateAPIView):
         if ra:
             qs = qs.filter(ra_id=ra)
 
+        # ── Filtre par plage de dates (date_acte) ─────────────────────────────
+        # Utilisé pour l'affichage « dossiers du jour » par défaut dans le frontend.
+        # Format attendu : YYYY-MM-DD (ISO 8601).
+        date_debut = p.get('date_debut', '').strip()
+        date_fin   = p.get('date_fin',   '').strip()
+        if date_debut:
+            qs = qs.filter(date_acte__date__gte=date_debut)
+        if date_fin:
+            qs = qs.filter(date_acte__date__lte=date_fin)
+
         return qs
 
     def perform_create(self, serializer):

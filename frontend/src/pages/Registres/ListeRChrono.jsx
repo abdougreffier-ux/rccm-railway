@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Table, Typography, Tag, Input, InputNumber, Select, Space, Button, Tooltip, message, Alert, Badge, Avatar, Modal, Checkbox } from 'antd';
+import { Table, Typography, Tag, Input, InputNumber, Select, Space, Button, Tooltip, message, Alert, Badge, Avatar, Modal, Checkbox, DatePicker } from 'antd';
 import {
   FilePdfOutlined, PrinterOutlined, PlusOutlined,
   EyeOutlined, EditOutlined, SendOutlined,
@@ -50,6 +50,11 @@ const ListeRChrono = () => {
   const [authFindLoading,  setAuthFindLoading]  = useState(false);
   const [authTypesChecked, setAuthTypesChecked] = useState(['CORRECTION']); // CORRECTION / IMPRESSION
   const [authMotif,        setAuthMotif]        = useState('');
+  // ── Filtre par plage de dates (par défaut : aujourd'hui) ─────────────────
+  const [dateRange, setDateRange] = useState([dayjs(), dayjs()]);
+  // ── Modal : autorisation globale d'impression (24h) ──────────────────────
+  const [globalAuthModal, setGlobalAuthModal] = useState(false);
+  const [globalAuthMotif, setGlobalAuthMotif] = useState('');
 
   const queryClient = useQueryClient();
   const navigate    = useNavigate();
@@ -60,9 +65,18 @@ const ListeRChrono = () => {
   const isAgent      = hasRole('AGENT_GU') || hasRole('AGENT_TRIBUNAL');
 
   // ── Données de la liste principale ──────────────────────────────────────────
+  const dateFmt  = 'YYYY-MM-DD';
+  const dateDebut = dateRange?.[0]?.format(dateFmt) || undefined;
+  const dateFin   = dateRange?.[1]?.format(dateFmt) || undefined;
+
   const { data, isLoading } = useQuery({
-    queryKey: ['rchrono', page, search, statut],
-    queryFn:  () => registreAPI.listChrono({ page, search, statut: statut || undefined }).then(r => r.data),
+    queryKey: ['rchrono', page, search, statut, dateDebut, dateFin],
+    queryFn:  () => registreAPI.listChrono({
+      page, search,
+      statut:      statut     || undefined,
+      date_debut:  dateDebut,
+      date_fin:    dateFin,
+    }).then(r => r.data),
     keepPreviousData: true,
   });
 
@@ -103,6 +117,27 @@ const ListeRChrono = () => {
       });
     return map;
   }, [myAuths]);
+
+  // Map raId → autorisation IMPRESSION valide et non expirée (unitaire, dossier précis)
+  const impStatusByRa = useMemo(() => {
+    const map = {};
+    myAuths
+      .filter(a => a.type_demande === 'IMPRESSION' && a.statut === 'AUTORISEE' && a.est_valide)
+      .forEach(a => {
+        const prev = map[a.dossier_id];
+        if (!prev || a.id > prev.id) map[a.dossier_id] = a;
+      });
+    return map;
+  }, [myAuths]);
+
+  // Autorisation globale 24h active (couvre tous les dossiers créés par l'agent)
+  const globalImpAuth = useMemo(() =>
+    myAuths.find(a =>
+      a.type_demande === 'IMPRESSION_GLOBALE' &&
+      a.statut === 'AUTORISEE' &&
+      a.est_valide
+    ) || null,
+  [myAuths]);
 
   // ── Mutations ────────────────────────────────────────────────────────────────
   const invaliderCache = () => {
@@ -216,6 +251,26 @@ const ListeRChrono = () => {
       setAuthFindLoading(false);
     }
   };
+
+  // ── Mutation : autorisation globale d'impression 24h ────────────────────
+  const demandeGlobalImpMut = useMutation({
+    mutationFn: (motif) => autorisationAPI.create({
+      type_demande:  'IMPRESSION_GLOBALE',
+      type_dossier:  'RA',
+      dossier_id:    0,    // sentinelle : "tous mes dossiers"
+      document_type: '',
+      motif,
+    }),
+    onSuccess: () => {
+      message.success(isAr
+        ? 'تم إرسال طلب الإذن العام للطباعة (24 ساعة) إلى كاتب الضبط.'
+        : 'Demande d\'autorisation globale d\'impression (24h) envoyée au greffier.');
+      setGlobalAuthModal(false);
+      setGlobalAuthMotif('');
+      refetchMyAuths();
+    },
+    onError: (e) => message.error(e.response?.data?.detail || t('msg.error')),
+  });
 
   // Étape 2 : soumettre la demande
   const submitAuth = () => {
@@ -345,6 +400,25 @@ const ListeRChrono = () => {
             </Tooltip>
           )}
 
+          {/* 🖨️ Impression — agents uniquement, dossier VALIDE + autorisation active
+              Visible si l'agent a une autorisation unitaire (IMPRESSION) ou globale (24h). */}
+          {isAgent && r.statut === 'VALIDE' && (impStatusByRa[r.ra] || globalImpAuth) && (
+            <>
+              <Tooltip title={isAr ? 'طباعة شهادة السجل الزمني' : 'Certificat RC'}>
+                <Button size="small" icon={<PrinterOutlined />}
+                  style={{ color: '#1677ff', borderColor: '#1677ff' }}
+                  onClick={() => openPDF(rapportAPI.certificatChronologique(r.id))} />
+              </Tooltip>
+              {r.ra && (
+                <Tooltip title={isAr ? 'مستخرج التسجيل التحليلي' : 'Extrait RA'}>
+                  <Button size="small" icon={<FilePdfOutlined />}
+                    style={{ color: '#52c41a', borderColor: '#52c41a' }}
+                    onClick={() => openPDF(rapportAPI.attestationImmatriculation(r.ra))} />
+                </Tooltip>
+              )}
+            </>
+          )}
+
           {/* 🔒 Demander correction — agents uniquement, dossier VALIDE
               L'apparence du bouton reflète l'état de la dernière demande de correction */}
           {isAgent && r.statut === 'VALIDE' && r.ra && (() => {
@@ -416,7 +490,7 @@ const ListeRChrono = () => {
             style={{ background: '#1a4480' }}>
             {t('rc.new')}
           </Button>
-          {/* Demander autorisation — agent uniquement, pour accéder à un dossier d'un autre agent */}
+          {/* Demander autorisation accès autre dossier — agent uniquement */}
           {isAgent && (
             <Tooltip title={isAr
               ? 'طلب إذن للوصول إلى ملف لم تقم بإنشائه (تصحيح أو طباعة)'
@@ -426,6 +500,23 @@ const ListeRChrono = () => {
                 onClick={() => { setAuthModal(true); setAuthStep(1); setAuthFindResult(null); setAuthFindError(''); }}
               >
                 {isAr ? 'طلب إذن' : 'Demander autorisation'}
+              </Button>
+            </Tooltip>
+          )}
+          {/* Autorisation globale d'impression 24h — agent uniquement */}
+          {isAgent && (
+            <Tooltip title={isAr
+              ? 'طلب إذن طباعة جميع ملفاتي لمدة 24 ساعة'
+              : 'Demander l\'autorisation d\'imprimer tous mes dossiers pendant 24h'}>
+              <Button
+                icon={<PrinterOutlined />}
+                onClick={() => { setGlobalAuthModal(true); setGlobalAuthMotif(''); }}
+                style={{ borderColor: '#52c41a', color: globalImpAuth ? '#52c41a' : undefined }}
+              >
+                {globalImpAuth
+                  ? (isAr ? `⏱ ${globalImpAuth.minutes_restantes ?? '?'} د` : `⏱ ${globalImpAuth.minutes_restantes ?? '?'} min`)
+                  : (isAr ? 'إذن الطباعة (24س)' : 'Impression groupée (24h)')
+                }
               </Button>
             </Tooltip>
           )}
@@ -536,6 +627,18 @@ const ListeRChrono = () => {
             { value: 'REJETE',  label: t('status.rejete') },
             { value: 'ANNULE',  label: t('status.annule') },
           ]}
+        />
+        {/* Filtre plage de dates — par défaut : aujourd'hui */}
+        <DatePicker.RangePicker
+          value={dateRange}
+          onChange={v => { setDateRange(v); setPage(1); }}
+          format="DD/MM/YYYY"
+          allowClear
+          placeholder={[
+            isAr ? 'تاريخ البداية' : 'Date début',
+            isAr ? 'تاريخ النهاية' : 'Date fin',
+          ]}
+          style={{ width: 260 }}
         />
         {/* Raccourci : afficher brouillons ET retournés (tous les dossiers à traiter) */}
         <Button
@@ -737,6 +840,60 @@ const ListeRChrono = () => {
         )}
       </Modal>
 
+      {/* ── Modal : autorisation globale d'impression (24h) ─────────────────── */}
+      <Modal
+        title={`⏱ ${isAr ? 'طلب إذن الطباعة العام (24 ساعة)' : 'Autorisation d\'impression groupée (24h)'}`}
+        open={globalAuthModal}
+        onCancel={() => { setGlobalAuthModal(false); setGlobalAuthMotif(''); }}
+        onOk={() => {
+          if (!globalAuthMotif.trim()) {
+            message.warning(isAr ? 'السبب مطلوب.' : 'Le motif est obligatoire.');
+            return;
+          }
+          demandeGlobalImpMut.mutate(globalAuthMotif);
+        }}
+        okText={isAr ? 'إرسال الطلب' : 'Envoyer la demande'}
+        cancelText={isAr ? 'إلغاء' : 'Annuler'}
+        confirmLoading={demandeGlobalImpMut.isPending}
+        destroyOnClose
+      >
+        {globalImpAuth ? (
+          <Alert
+            type="success"
+            showIcon
+            icon={<CheckCircleOutlined />}
+            message={isAr
+              ? `لديك إذن طباعة عام نشط — يبقى صالحاً لمدة ${globalImpAuth.minutes_restantes ?? '?'} دقيقة أخرى.`
+              : `Vous avez déjà une autorisation globale active — expire dans ${globalImpAuth.minutes_restantes ?? '?'} minute(s).`}
+          />
+        ) : (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={isAr
+                ? 'ستمكنك هذه الإذن من طباعة جميع مستخرجات ملفاتك الخاصة لمدة 24 ساعة. تنتهي تلقائياً بعد ذلك.'
+                : 'Cette autorisation vous permettra d\'imprimer les extraits de TOUS vos propres dossiers pendant 24 heures. Elle expire automatiquement après ce délai.'}
+            />
+            <div style={{ marginBottom: 6, fontWeight: 500 }}>
+              {isAr ? 'سبب الطلب' : 'Motif de la demande'}{' '}
+              <span style={{ color: '#ff4d4f' }}>*</span>
+            </div>
+            <Input.TextArea
+              rows={3}
+              placeholder={isAr
+                ? 'اذكر سبب طلب الإذن العام للطباعة...'
+                : 'Indiquez le motif de votre demande d\'autorisation groupée...'}
+              value={globalAuthMotif}
+              onChange={e => setGlobalAuthMotif(e.target.value)}
+              showCount
+              maxLength={500}
+            />
+          </>
+        )}
+      </Modal>
+
       {/* ── Tableau ──────────────────────────────────────────────────────────── */}
       <Table
         dataSource={data?.results || []}
@@ -747,24 +904,21 @@ const ListeRChrono = () => {
         rowClassName={ROW_CLASS}
         locale={{
           emptyText: (() => {
-            // Si un filtre est actif ET que l'agent a des enregistrements dans d'autres statuts
             const totalAgent = (nbBrouillons || 0) + (nbRetournes || 0);
-            if (statut && totalAgent > 0) {
+            const hasFilter  = statut || dateDebut || dateFin;
+            if (hasFilter && totalAgent > 0) {
               return (
                 <Space direction="vertical" align="center" style={{ padding: '24px 0' }}>
                   <span style={{ color: '#8c8c8c', fontSize: 13 }}>
-                    {isAr
-                      ? 'لا توجد نتائج لهذا الفلتر.'
-                      : 'Aucun résultat pour ce filtre.'}
+                    {isAr ? 'لا توجد نتائج لهذه الفلاتر.' : 'Aucun résultat pour ces filtres.'}
                   </span>
                   <Button
-                    size="small"
-                    type="link"
-                    onClick={() => { setStatut(''); setPage(1); }}
+                    size="small" type="link"
+                    onClick={() => { setStatut(''); setDateRange(null); setPage(1); }}
                   >
                     {isAr
                       ? `عرض جميع سجلاتي (${totalAgent})`
-                      : `Voir tous mes enregistrements (${nbBrouillons + nbRetournes})`}
+                      : `Voir tous mes enregistrements (${totalAgent})`}
                   </Button>
                 </Space>
               );

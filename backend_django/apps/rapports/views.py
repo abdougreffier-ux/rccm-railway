@@ -2175,11 +2175,19 @@ class CertificatChronologiqueView(PdfAuditMixin, APIView):
 def _verifier_autorisation_impression(request, type_dossier, dossier_id, document_type):
     """
     Vérifie qu'un agent (non-greffier) possède une autorisation d'impression valide.
-    Retourne (True, None) si autorisé, (False, response) sinon.
+
+    Deux niveaux vérifiés dans l'ordre :
+      1. Autorisation spécifique (IMPRESSION, dossier précis, 20 min)
+      2. Autorisation globale   (IMPRESSION_GLOBALE, 24h) — uniquement si
+         l'agent est le créateur du RA demandé.
+
+    Retourne (True, None) si autorisé, (False, Response 403) sinon.
     """
     from apps.autorisations.models import DemandeAutorisation
     now = _tz.now()
-    auth = DemandeAutorisation.objects.filter(
+
+    # ── 1. Autorisation unitaire ──────────────────────────────────────────────
+    auth_unitaire = DemandeAutorisation.objects.filter(
         demandeur=request.user,
         type_demande='IMPRESSION',
         type_dossier=type_dossier,
@@ -2188,17 +2196,39 @@ def _verifier_autorisation_impression(request, type_dossier, dossier_id, documen
         statut='AUTORISEE',
         date_expiration__gt=now,
     ).order_by('-date_decision').first()
-    if not auth:
-        from rest_framework.response import Response
-        import rest_framework.status as http_st
-        return False, Response(
-            {
-                'detail':    'Impression non autorisée. Veuillez soumettre une demande d\'autorisation au greffier.',
-                'detail_ar': 'الطباعة غير مسموح بها. يرجى تقديم طلب إذن إلى كاتب الضبط.',
-            },
-            status=http_st.HTTP_403_FORBIDDEN,
-        )
-    return True, None
+    if auth_unitaire:
+        return True, None
+
+    # ── 2. Autorisation globale 24h ───────────────────────────────────────────
+    # Valide seulement si l'agent est le créateur du RA (pas pour les dossiers
+    # d'autres agents, même si leur RA a été autorisé par une autre voie).
+    if type_dossier == 'RA':
+        auth_globale = DemandeAutorisation.objects.filter(
+            demandeur=request.user,
+            type_demande='IMPRESSION_GLOBALE',
+            type_dossier='RA',
+            statut='AUTORISEE',
+            date_expiration__gt=now,
+        ).order_by('-date_decision').first()
+        if auth_globale:
+            from apps.registres.models import RegistreAnalytique
+            try:
+                ra = RegistreAnalytique.objects.only('created_by_id').get(pk=dossier_id)
+                if ra.created_by_id == request.user.pk:
+                    return True, None
+            except RegistreAnalytique.DoesNotExist:
+                pass
+
+    # ── Aucune autorisation valide ────────────────────────────────────────────
+    from rest_framework.response import Response
+    import rest_framework.status as http_st
+    return False, Response(
+        {
+            'detail':    'Impression non autorisée. Veuillez soumettre une demande d\'autorisation au greffier.',
+            'detail_ar': 'الطباعة غير مسموح بها. يرجى تقديم طلب إذن إلى كاتب الضبط.',
+        },
+        status=http_st.HTTP_403_FORBIDDEN,
+    )
 
 
 # ── Langue de l'acte : lecture depuis le RA (immatriculation) ────────────────

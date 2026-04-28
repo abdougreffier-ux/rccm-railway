@@ -20,9 +20,13 @@ class DemandeAutorisation(models.Model):
     EXPIRATION_IMPRESSION_MINUTES = 20
 
     # ── Choix ─────────────────────────────────────────────────────────────────
+    # ── Durée d'impression globale (24h) ─────────────────────────────────────
+    EXPIRATION_IMPRESSION_GLOBALE_HEURES = 24
+
     TYPE_DEMANDE_CHOICES = [
-        ('IMPRESSION', 'Impression'),
-        ('CORRECTION', 'Correction'),
+        ('IMPRESSION',        'Impression (dossier précis, 20 min)'),
+        ('CORRECTION',        'Correction'),
+        ('IMPRESSION_GLOBALE', 'Impression globale — tous mes dossiers (24h)'),
     ]
     STATUT_CHOICES = [
         ('EN_ATTENTE', 'En attente'),

@@ -65,14 +65,22 @@ class DemandeAutorisationCreateSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
-        # Pour IMPRESSION, document_type obligatoire
-        if data.get('type_demande') == 'IMPRESSION' and not data.get('document_type'):
+        type_demande = data.get('type_demande')
+
+        # Pour IMPRESSION spécifique, document_type obligatoire
+        if type_demande == 'IMPRESSION' and not data.get('document_type'):
             raise serializers.ValidationError(
                 {'document_type': 'Le type de document est obligatoire pour une demande d\'impression.'}
             )
-        # Pour CORRECTION, document_type ignoré
-        if data.get('type_demande') == 'CORRECTION':
+
+        # Pour CORRECTION et IMPRESSION_GLOBALE, document_type non pertinent
+        if type_demande in ('CORRECTION', 'IMPRESSION_GLOBALE'):
             data['document_type'] = ''
+
+        # Pour IMPRESSION_GLOBALE : aucun dossier précis → dossier_id=0 (sentinelle)
+        if type_demande == 'IMPRESSION_GLOBALE':
+            data['dossier_id'] = 0
+
         return data
 
 
