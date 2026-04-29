@@ -23,45 +23,98 @@ from apps.core.permissions import (
 def _next_numero_chrono():
     """
     Génère le prochain numéro d'enregistrement chronologique.
-    Format purement numérique sur 4 chiffres minimum : 0001, 0002, …, 9999, 10000…
-    Numérotation continue, sans préfixe, sans réinitialisation annuelle.
+
+    Règle RCCM (non négociable) : numérotation ANNUELLE.
+    Le compteur est remis à 1 au 1er janvier de chaque nouvelle année.
+    L'identifiant juridique d'un acte est le COUPLE (annee_chrono, numero_chrono).
+
+    Format du numéro séquentiel : 4 chiffres minimum (0001, 0002 … 9999, 10000 …)
+
+    Retourne : tuple (numero_str, annee_int)
     """
     from django.db import connection
+    annee = timezone.now().year
     with connection.cursor() as c:
         c.execute("""
             INSERT INTO sequences_numerotation (code, prefixe, annee, dernier_num, nb_chiffres)
-            VALUES ('CHRONO', '', 0, 1, 4)
-            ON CONFLICT (code) DO UPDATE
-            SET dernier_num = sequences_numerotation.dernier_num + 1,
-                updated_at  = NOW()
-            RETURNING dernier_num
-        """)
-        row = c.fetchone()
-    return str(row[0]).zfill(4)
-
-
-def _next_numero_ra():
-    """
-    Génère le prochain numéro analytique :
-    numérotation IMPAIRE continue (1, 3, 5, 7…) sans réinitialisation annuelle.
-    Format purement numérique : 000001, 000003, 000005…
-    """
-    from django.db import connection
-    with connection.cursor() as c:
-        c.execute("""
-            INSERT INTO sequences_numerotation (code, prefixe, annee, dernier_num, nb_chiffres)
-            VALUES ('RA', '', 0, 1, 6)
+            VALUES ('CHRONO', '', %s, 1, 4)
             ON CONFLICT (code) DO UPDATE
             SET dernier_num = CASE
-                WHEN sequences_numerotation.dernier_num = 0 THEN 1
-                ELSE sequences_numerotation.dernier_num + 2
-            END,
-            prefixe = '',
-            updated_at = NOW()
-            RETURNING prefixe, dernier_num, nb_chiffres
-        """)
+                    -- Nouvelle année → reset à 1 (règle RCCM annuelle)
+                    WHEN sequences_numerotation.annee != EXCLUDED.annee THEN 1
+                    ELSE sequences_numerotation.dernier_num + 1
+                END,
+                annee      = EXCLUDED.annee,
+                updated_at = NOW()
+            RETURNING annee, dernier_num
+        """, [annee])
         row = c.fetchone()
-    return f"{str(row[1]).zfill(row[2])}"
+    return str(row[1]).zfill(4), int(row[0])
+
+
+def _next_numero_ra(type_entite):
+    """
+    Génère le prochain numéro analytique selon la règle de parité RCCM (non négociable) :
+      • Personne physique  (PH) → PAIR   (2, 4, 6, 8 …)   séquence RA_PP
+      • Personne morale    (PM) → IMPAIR (1, 3, 5, 7 …)   séquence RA_PM
+      • Succursale         (SC) → IMPAIR (1, 3, 5, 7 …)   séquence RA_PM
+
+    La numérotation est continue, non liée à l'année, jamais réinitialisée.
+    Format zéro-padé sur 6 chiffres : 000002, 000004 … / 000001, 000003 …
+
+    Paramètre :
+      type_entite — valeur du champ RegistreAnalytique.type_entite ('PH', 'PM' ou 'SC')
+
+    Lève ValueError si la parité produite est incorrecte (verrou bloquant).
+    """
+    if type_entite == 'PH':
+        code     = 'RA_PP'
+        init_val = 2    # premier numéro pair
+        step     = 2
+    elif type_entite in ('PM', 'SC'):
+        code     = 'RA_PM'
+        init_val = 1    # premier numéro impair
+        step     = 2
+    else:
+        raise ValueError(
+            f"RCCM — type_entite inconnu : {type_entite!r}. Attendu : PH, PM ou SC."
+        )
+
+    from django.db import connection
+    with connection.cursor() as c:
+        c.execute("""
+            INSERT INTO sequences_numerotation (code, prefixe, annee, dernier_num, nb_chiffres)
+            VALUES (%s, '', 0, %s, 6)
+            ON CONFLICT (code) DO UPDATE
+            SET dernier_num = CASE
+                    -- Si le compteur a été remis à 0 manuellement, repartir de init_val
+                    WHEN sequences_numerotation.dernier_num = 0 THEN EXCLUDED.dernier_num
+                    ELSE sequences_numerotation.dernier_num + %s
+                END,
+                prefixe    = '',
+                updated_at = NOW()
+            RETURNING dernier_num, nb_chiffres
+        """, [code, init_val, step])
+        row = c.fetchone()
+
+    generated   = int(row[0])
+    nb_chiffres = int(row[1])
+
+    # ── Verrou de parité — bloquant (règle RCCM) ──────────────────────────────
+    if type_entite == 'PH' and generated % 2 != 0:
+        raise ValueError(
+            f"RCCM — Violation règle de parité : le N° analytique PP doit être PAIR. "
+            f"Séquence {code!r} a produit {generated} (IMPAIR). "
+            f"Corriger le compteur via PUT /parametrage/numerotation/{code}/."
+        )
+    if type_entite in ('PM', 'SC') and generated % 2 == 0:
+        raise ValueError(
+            f"RCCM — Violation règle de parité : le N° analytique PM/SC doit être IMPAIR. "
+            f"Séquence {code!r} a produit {generated} (PAIR). "
+            f"Corriger le compteur via PUT /parametrage/numerotation/{code}/."
+        )
+
+    return str(generated).zfill(nb_chiffres)
 
 
 # ── Registre Analytique ───────────────────────────────────────────────────────
@@ -295,9 +348,13 @@ class ValiderRAView(APIView):
                 {'detail': f'Ce dossier ne peut pas être validé dans son état « {ra.statut} ».'},
                 status=400,
             )
-        # Génération du numéro analytique — attribué uniquement à l'immatriculation
+        # Génération du numéro analytique — attribué uniquement à l'immatriculation.
+        # La règle de parité RCCM est appliquée ici (PP → pair, PM/SC → impair).
         if not ra.numero_ra:
-            ra.numero_ra = _next_numero_ra()
+            try:
+                ra.numero_ra = _next_numero_ra(ra.type_entite)
+            except ValueError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         ra.statut            = 'IMMATRICULE'
         ra.validated_at      = timezone.now()
         ra.validated_by      = request.user
@@ -1459,8 +1516,12 @@ class EnregistrementInitialView(APIView):
         if _langue not in ('fr', 'ar'):
             _langue = 'fr'
 
+        # Numérotation chronologique annuelle : le tuple (annee_chrono, numero_chrono)
+        # constitue l'identifiant juridique de l'acte (règle RCCM non négociable).
+        _num_chrono, _annee_chrono = _next_numero_chrono()
         chrono = RegistreChronologique.objects.create(
-            numero_chrono=_next_numero_chrono(),
+            numero_chrono=_num_chrono,
+            annee_chrono=_annee_chrono,
             ra=ra,
             declarant=declarant,
             type_acte='IMMATRICULATION',

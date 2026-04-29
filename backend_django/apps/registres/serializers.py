@@ -632,7 +632,7 @@ class RegistreChronologiqueSerializer(serializers.ModelSerializer):
     class Meta:
         model  = RegistreChronologique
         fields = [
-            'id', 'uuid', 'numero_chrono', 'ra', 'ra_numero', 'ra_statut', 'ra_type_entite',
+            'id', 'uuid', 'numero_chrono', 'annee_chrono', 'ra', 'ra_numero', 'ra_statut', 'ra_type_entite',
             'denomination', 'denomination_ar', 'type_acte', 'date_acte', 'date_enregistrement',
             'statut', 'statut_label', 'langue_acte', 'observations',
             'modifications_retournees',
@@ -697,7 +697,7 @@ class RegistreChronologiqueDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model  = RegistreChronologique
         fields = [
-            'id', 'uuid', 'numero_chrono',
+            'id', 'uuid', 'numero_chrono', 'annee_chrono',
             'ra', 'ra_numero', 'ra_statut',
             'ra_type_entite', 'ra_localite',
             'ra_gerants', 'ra_associes', 'ra_administrateurs', 'ra_commissaires', 'ra_domaines',

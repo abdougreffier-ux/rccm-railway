@@ -322,6 +322,9 @@ class RechercherRCView(APIView):
             )
 
         # ── Recherche ─────────────────────────────────────────────────────────
+        # L'identifiant juridique d'un acte chrono est le COUPLE (annee_chrono, numero_chrono).
+        # On filtre d'abord par numero_chrono, puis par annee_chrono si fourni
+        # (plus précis que date_acte__year, et conforme à la numérotation annuelle RCCM).
         from apps.registres.models import RegistreChronologique
         qs = RegistreChronologique.objects.select_related(
             'ra', 'ra__ph', 'ra__pm', 'ra__sc',
@@ -329,7 +332,13 @@ class RechercherRCView(APIView):
 
         if annee_raw:
             try:
-                qs = qs.filter(date_acte__year=int(annee_raw))
+                annee_int = int(annee_raw)
+                # Filtre prioritaire sur annee_chrono (champ dédié) ;
+                # repli sur date_acte__year pour les anciens enregistrements sans annee_chrono.
+                from django.db.models import Q
+                qs = qs.filter(
+                    Q(annee_chrono=annee_int) | Q(annee_chrono__isnull=True, date_acte__year=annee_int)
+                )
             except ValueError:
                 pass  # annee invalide → ignorée (la recherche continue sans filtre année)
 

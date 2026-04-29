@@ -261,13 +261,19 @@ class NumerotationListView(APIView):
             """)
             rows = c.fetchall()
         labels = {
-            'RA':  'N° Analytique (impair, continu)',
-            'RC':  'N° Chronologique (annuel)',
-            'DMD': 'N° Demande (annuel)',
-            'DEP': 'N° Dépôt (annuel)',
-            'MOD': 'N° Modification (annuel)',
-            'RAD': 'N° Radiation (annuel)',
-            'CES': 'N° Cession (annuel)',
+            # Numérotation analytique — deux séquences distinctes (règle de parité RCCM)
+            'RA_PP': 'N° Analytique Personne Physique (PAIR, continu — ex : 000002, 000004…)',
+            'RA_PM': 'N° Analytique Personne Morale / Succursale (IMPAIR, continu — ex : 000001, 000003…)',
+            # Ancien compteur unifié — conservé en lecture, ne doit plus être incrémenté
+            'RA':    'N° Analytique (ancien compteur unifié — référence historique, lecture seule)',
+            # Numérotation chronologique — annuelle (règle RCCM)
+            'CHRONO':'N° Chronologique (annuel, remis à 1 chaque 1er janvier)',
+            'RC':    'N° Chronologique (ancien code — lecture seule)',
+            'DMD':   'N° Demande (annuel)',
+            'DEP':   'N° Dépôt (annuel)',
+            'MOD':   'N° Modification (annuel)',
+            'RAD':   'N° Radiation (annuel)',
+            'CES':   'N° Cession (annuel)',
         }
         data = [
             {
@@ -302,9 +308,24 @@ class NumerotationUpdateView(APIView):
         except (ValueError, TypeError):
             return Response({'detail': 'dernier_num doit être un entier.'}, status=400)
 
-        # Pour RA : le numéro doit être impair
+        # ── Règles de parité RCCM (bloquantes) ────────────────────────────────
+        # RA_PP : séquence Personne Physique → doit être PAIR
+        if code == 'RA_PP' and dernier_num % 2 != 0:
+            return Response(
+                {'detail': 'Le N° Analytique PP (RA_PP) doit être PAIR (2, 4, 6…). '
+                           f'La valeur {dernier_num} est impaire — opération refusée.'},
+                status=400,
+            )
+        # RA_PM : séquence Personne Morale / Succursale → doit être IMPAIR
+        if code == 'RA_PM' and dernier_num % 2 == 0:
+            return Response(
+                {'detail': 'Le N° Analytique PM/SC (RA_PM) doit être IMPAIR (1, 3, 5…). '
+                           f'La valeur {dernier_num} est paire — opération refusée.'},
+                status=400,
+            )
+        # RA (ancien compteur) : conserve la règle impair pour rétrocompatibilité
         if code == 'RA' and dernier_num % 2 == 0:
-            return Response({'detail': 'Le N° Analytique doit être impair (1, 3, 5…).'}, status=400)
+            return Response({'detail': 'Le N° Analytique (RA) doit être impair (1, 3, 5…).'}, status=400)
 
         with connection.cursor() as c:
             c.execute("""

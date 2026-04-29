@@ -156,7 +156,14 @@ class RegistreChronologique(models.Model):
     LANGUE_CHOICES = [('fr', 'Français'), ('ar', 'Arabe')]
 
     uuid                 = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    numero_chrono        = models.CharField(max_length=30, unique=True, verbose_name='N° chronologique')
+    # ── Numérotation chronologique ─────────────────────────────────────────────
+    # Règle RCCM : numérotation ANNUELLE, remise à zéro chaque 1er janvier.
+    # L'identifiant juridique d'un acte est le COUPLE (annee_chrono / numero_chrono).
+    # La contrainte d'unicité porte sur ce couple ; le numéro seul peut se répéter
+    # d'une année à l'autre (ex : 0001 existe en 2026 ET en 2027 — ce sont deux
+    # actes distincts).
+    numero_chrono        = models.CharField(max_length=30, verbose_name='N° chronologique', db_index=True)
+    annee_chrono         = models.IntegerField(null=True, blank=True, verbose_name='Année chronologique', db_index=True)
     ra                   = models.ForeignKey(RegistreAnalytique, null=True, blank=True, on_delete=models.PROTECT, related_name='chronos')
     declarant            = models.ForeignKey(
         Declarant, null=True, blank=True,
@@ -187,8 +194,11 @@ class RegistreChronologique(models.Model):
         ordering            = ['-date_acte']
         verbose_name        = 'Registre chronologique'
         verbose_name_plural = 'Registre chronologique'
+        # Unicité sur le couple (annee_chrono, numero_chrono) — règle RCCM :
+        # le même numéro séquentiel peut exister dans deux années différentes.
+        unique_together     = [('annee_chrono', 'numero_chrono')]
 
-    def __str__(self): return f'RC {self.numero_chrono}'
+    def __str__(self): return f'RC {self.annee_chrono}/{self.numero_chrono}' if self.annee_chrono else f'RC {self.numero_chrono}'
 
 
 class Associe(models.Model):
