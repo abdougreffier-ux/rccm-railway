@@ -53,6 +53,9 @@ INSTALLED_APPS = [
     'apps.autorisations',
     'apps.cessions_fonds',
     'apps.certificats',
+    # ── Interopérabilité & Registre Central (API inter-administrations) ──────
+    'apps.interop',
+    'apps.registre_central',
 ]
 
 MIDDLEWARE = [
@@ -158,6 +161,15 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
         'rest_framework.renderers.JSONRenderer',
     ),
+    # ── Throttling — protection API inter-administrations ────────────────────
+    'DEFAULT_THROTTLE_CLASSES': [
+        'apps.interop.throttling.ApiKeyThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'interop_standard':    config('THROTTLE_INTEROP_STANDARD',    default='200/hour'),
+        'interop_prioritaire': config('THROTTLE_INTEROP_PRIORITAIRE', default='1000/hour'),
+        'public_verification': config('THROTTLE_PUBLIC_VERIFICATION', default='60/min'),
+    },
     'DATE_FORMAT': '%Y-%m-%d',
     'DATE_INPUT_FORMATS': ['%Y-%m-%d', '%d/%m/%Y'],
     'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
@@ -296,3 +308,20 @@ LOGGING = {
         },
     },
 }
+
+# ── Interopérabilité — API inter-administrations ──────────────────────────────
+# Middleware de journalisation des appels externes.
+# Insérer après AuthenticationMiddleware (voir MIDDLEWARE ci-dessus).
+# Activation manuelle : ajouter dans MIDDLEWARE :
+#   'apps.interop.middleware.InteropJournalMiddleware',
+# (non ajouté par défaut pour ne pas impacter les performances internes)
+
+# ── Registre Central — Consolidation nationale ────────────────────────────────
+# URL de l'endpoint du Registre Central national (transmission mensuelle).
+# Laisser vide pour activer le MODE SANDBOX (transmission simulée).
+# Variable d'environnement : URL_REGISTRE_CENTRAL
+URL_REGISTRE_CENTRAL = config('URL_REGISTRE_CENTRAL', default='')
+
+# Clé API pour authentification auprès du Registre Central (optionnelle).
+# Variable d'environnement : CLE_API_REGISTRE_CENTRAL
+CLE_API_REGISTRE_CENTRAL = config('CLE_API_REGISTRE_CENTRAL', default='')

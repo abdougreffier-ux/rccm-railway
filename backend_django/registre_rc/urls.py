@@ -7,6 +7,7 @@ from django.utils import timezone as _tz
 from rest_framework_simplejwt.views import TokenRefreshView
 from apps.utilisateurs.views import CustomTokenObtainPairView, LogoutView, MeView, ChangePasswordView
 from apps.rapports.verification import VerificationPubliqueView
+from apps.interop.urls import interop_urlpatterns, rc_externe_urlpatterns
 
 
 def health_view(request):
@@ -61,4 +62,18 @@ urlpatterns = [
     path('api/historique/',           include('apps.historique.urls')),
     path('api/autorisations/',        include('apps.autorisations.urls')),
     path('api/certificats/',          include('apps.certificats.urls')),
+
+    # ── API v1 — Inter-administrations & Registre Central ────────────────────
+    # Versioning : /api/v1/* — permet l'évolution sans rupture de compatibilité.
+    #
+    # Authentification : ApiKeyAuthentication (X-RCCM-API-Key)
+    #   distinct de l'auth JWT interne (/api/*).
+    #
+    # /api/v1/interop/* — gestion des systèmes et clés (greffier JWT) +
+    #                      endpoints consommés par partenaires (API key)
+    # /api/v1/rc/*       — API consommée par les systèmes externes
+    # /api/v1/releve/*   — relevés mensuels + transmission Registre Central
+    path('api/v1/interop/',  include((interop_urlpatterns,  'interop'))),
+    path('api/v1/rc/',       include((rc_externe_urlpatterns, 'rc-externe'))),
+    path('api/v1/releve/',   include('apps.registre_central.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
