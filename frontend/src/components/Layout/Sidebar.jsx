@@ -8,7 +8,7 @@ import {
   SearchOutlined, BarChartOutlined, SettingOutlined, TeamOutlined,
   AuditOutlined, HistoryOutlined, SafetyCertificateOutlined,
   BankOutlined, ShopOutlined, PieChartOutlined, CheckSquareOutlined,
-  LockOutlined,
+  LockOutlined, GlobalOutlined,
 } from '@ant-design/icons';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -69,6 +69,7 @@ const Sidebar = ({ collapsed }) => {
     { key: '/recherche',     icon: <SearchOutlined />,      label: t('nav.search'),        roles: GREFFIER_ONLY },
     { key: '/rapports',      icon: <BarChartOutlined />,    label: t('nav.reports'),       roles: GREFFIER_ONLY },
     { key: '/journal',         icon: <AuditOutlined />,        label: t('nav.journal'),        roles: GREFFIER_ONLY },
+    { key: '/registre-central', icon: <GlobalOutlined />,         label: isAr ? 'السجل المركزي الوطني' : 'Registre Central', roles: GREFFIER_ONLY },
     { key: '/autorisations',     icon: <CheckSquareOutlined />,     label: t('nav.autorisations'),    roles: GREFFIER_ONLY },
     { key: '/mes-autorisations', icon: <LockOutlined />,             label: isAr ? 'طلبات التفويض' : 'Mes autorisations', roles: [ROLE.AGENT_GU, ROLE.AGENT_TRIBUNAL] },
     { key: '/certificats',       icon: <SafetyCertificateOutlined />, label: t('nav.certificats') || 'Certificats', roles: TRIBUNAL_ONLY },

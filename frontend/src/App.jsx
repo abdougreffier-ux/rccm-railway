@@ -51,6 +51,9 @@ import MesAutorisations   from './pages/Autorisations/MesAutorisations';
 import ListeCertificats   from './pages/Certificats/ListeCertificats';
 import Utilisateurs       from './pages/Administration/Utilisateurs';
 import Parametrage        from './pages/Administration/Parametrage';
+import ListeReleves          from './pages/RegistreCentral/ListeReleves';
+import DetailReleve          from './pages/RegistreCentral/DetailReleve';
+import JournalTransmissions  from './pages/RegistreCentral/JournalTransmissions';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -162,6 +165,11 @@ const AppRoutes = () => {
         <Route path="historique/import"       element={<GreffierRoute><ImportHistorique /></GreffierRoute>} />
         <Route path="historique/:id"          element={<DetailHistorique />} />
         <Route path="historique/:id/modifier" element={<FormulaireHistorique />} />
+
+        {/* Registre Central national — Greffier uniquement, lecture seule */}
+        <Route path="registre-central"                   element={<GreffierRoute><ListeReleves /></GreffierRoute>} />
+        <Route path="registre-central/:id"               element={<GreffierRoute><DetailReleve /></GreffierRoute>} />
+        <Route path="registre-central/:id/transmissions" element={<GreffierRoute><JournalTransmissions /></GreffierRoute>} />
 
         {/* Administration */}
         <Route path="administration/utilisateurs" element={<Utilisateurs />} />

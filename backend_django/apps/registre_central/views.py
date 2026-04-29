@@ -28,31 +28,48 @@ from apps.registre_central.models import ReleveActesMensuels, TransmissionReleve
 from apps.registre_central.serializers import generer_contenu_releve
 
 
+def _releve_to_dict(r, include_actes=False):
+    """Sérialise un relevé mensuel en dict."""
+    d = {
+        'id':                  r.id,
+        'annee':               r.annee,
+        'mois':                r.mois,
+        'periode_label':       r.periode_label,
+        'statut':              r.statut,
+        'statut_label':        r.get_statut_display(),
+        'nb_immatriculations': r.nb_immatriculations,
+        'nb_modifications':    r.nb_modifications,
+        'nb_cessions':         r.nb_cessions,
+        'nb_radiations':       r.nb_radiations,
+        'nb_actes_total':      r.nb_actes_total,
+        'genere_le':           r.genere_le.isoformat(),
+        'finalise_le':         r.finalise_le.isoformat() if r.finalise_le else None,
+        'genere_par':          str(r.genere_par) if r.genere_par else None,
+        'finalise_par':        str(r.finalise_par) if r.finalise_par else None,
+        'nb_transmissions':    r.transmissions.count(),
+        'observations':        r.observations,
+    }
+    if include_actes:
+        d['actes_json'] = r.actes_json
+    return d
+
+
 class ReleveListView(APIView):
     """GET /api/v1/releve/ — liste des relevés mensuels."""
     permission_classes = [EstGreffier]
 
     def get(self, request):
         qs = ReleveActesMensuels.objects.all()
-        data = [
-            {
-                'id':                  r.id,
-                'annee':               r.annee,
-                'mois':                r.mois,
-                'periode_label':       r.periode_label,
-                'statut':              r.statut,
-                'statut_label':        r.get_statut_display(),
-                'nb_immatriculations': r.nb_immatriculations,
-                'nb_modifications':    r.nb_modifications,
-                'nb_cessions':         r.nb_cessions,
-                'nb_radiations':       r.nb_radiations,
-                'nb_actes_total':      r.nb_actes_total,
-                'genere_le':           r.genere_le.isoformat(),
-                'nb_transmissions':    r.transmissions.count(),
-            }
-            for r in qs
-        ]
-        return Response(data)
+        return Response([_releve_to_dict(r) for r in qs])
+
+
+class ReleveDetailView(APIView):
+    """GET /api/v1/releve/<id>/ — détail complet d'un relevé (avec actes_json)."""
+    permission_classes = [EstGreffier]
+
+    def get(self, request, pk):
+        releve = get_object_or_404(ReleveActesMensuels, pk=pk)
+        return Response(_releve_to_dict(releve, include_actes=True))
 
 
 class GenererReleveView(APIView):

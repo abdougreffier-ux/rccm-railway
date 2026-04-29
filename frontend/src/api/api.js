@@ -896,4 +896,49 @@ export const certificatsAPI = {
   searchEntite:  (q)             => api.get('/certificats/search-entite/', { params: { q } }),
 };
 
+// ── Registre Central — relevés mensuels & transmissions ──────────────────────
+// Endpoints : /api/v1/releve/* (réservé greffier)
+const API_V1 = `${API_HOST}/api/v1`;
+const apiV1  = axios.create({ baseURL: API_V1, headers: { 'Content-Type': 'application/json' } });
+apiV1.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+apiV1.interceptors.response.use(
+  r => r,
+  async err => {
+    // réutilise la même logique de refresh que l'instance principale
+    const orig = err.config;
+    if (err.response?.status === 401 && !orig._retry) {
+      orig._retry = true;
+      const refresh = localStorage.getItem('refresh_token');
+      if (refresh) {
+        try {
+          const { data } = await axios.post(`${BASE_URL}/auth/refresh/`, { refresh });
+          localStorage.setItem('access_token',  data.access);
+          if (data.refresh) localStorage.setItem('refresh_token', data.refresh);
+          orig.headers.Authorization = `Bearer ${data.access}`;
+          return apiV1(orig);
+        } catch {}
+      }
+    }
+    return Promise.reject(err);
+  }
+);
+
+export const registreCentralAPI = {
+  // Relevés mensuels
+  list:       ()          => apiV1.get('/releve/'),
+  get:        (id)        => apiV1.get(`/releve/${id}/`),
+  generer:    (data)      => apiV1.post('/releve/generer/', data),
+  finaliser:  (id)        => apiV1.post(`/releve/${id}/finaliser/`),
+  transmettre:(id)        => apiV1.post(`/releve/${id}/transmettre/`),
+  transmissions: (id)     => apiV1.get(`/releve/${id}/transmissions/`),
+  // Gestion des systèmes externes (greffier)
+  statusInterop:  ()      => apiV1.get('/interop/status/'),
+  systemes:       ()      => apiV1.get('/interop/systemes/'),
+  journal:        (params)=> apiV1.get('/interop/journal/', { params }),
+};
+
 export default api;
