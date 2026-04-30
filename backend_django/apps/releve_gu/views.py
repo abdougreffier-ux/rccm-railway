@@ -170,6 +170,7 @@ class ReleveGUListView(generics.ListAPIView):
     """GET /api/releve-gu/ — liste des relevés mensuels (Greffier uniquement)."""
     permission_classes = [EstGreffier]
     serializer_class   = ReleveGUListSerializer
+    pagination_class   = None   # Réponse tableau direct — pas de pagination DRF
 
     def get_queryset(self):
         return (

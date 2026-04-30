@@ -55,7 +55,7 @@ const ListeRelevesGU = () => {
   // ── Données ──────────────────────────────────────────────────────────────────
   const { data: releves = [], isLoading, refetch } = useQuery({
     queryKey: ['releve-gu-list'],
-    queryFn:  () => releveGuAPI.list().then(r => r.data),
+    queryFn:  () => releveGuAPI.list().then(r => Array.isArray(r.data) ? r.data : (r.data.results ?? [])),
   });
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
