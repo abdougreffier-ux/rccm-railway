@@ -57,13 +57,15 @@ class ErrorBoundary extends React.Component {
               <p style={{ color: '#888', fontSize: 13 }}>
                 حدث خطأ غير متوقع أثناء تحميل هذه الصفحة. يرجى إعادة التحميل أو الاتصال بالدعم التقني.
               </p>
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {this.state.error && (
                 <pre style={{
                   marginTop: 16, textAlign: 'left', background: '#fff0f0',
                   padding: 12, borderRadius: 4, fontSize: 12, overflowX: 'auto',
                   border: '1px solid #ffccc7',
                 }}>
                   {this.state.error.toString()}
+                  {'\n\n'}
+                  {this.state.error.stack || ''}
                 </pre>
               )}
             </div>
