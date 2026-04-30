@@ -54,6 +54,7 @@ import Parametrage        from './pages/Administration/Parametrage';
 import ListeReleves          from './pages/RegistreCentral/ListeReleves';
 import DetailReleve          from './pages/RegistreCentral/DetailReleve';
 import JournalTransmissions  from './pages/RegistreCentral/JournalTransmissions';
+import ListeRelevesGU        from './pages/ReleveGU/ListeRelevesGU';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -170,6 +171,9 @@ const AppRoutes = () => {
         <Route path="registre-central"                   element={<GreffierRoute><ListeReleves /></GreffierRoute>} />
         <Route path="registre-central/:id"               element={<GreffierRoute><DetailReleve /></GreffierRoute>} />
         <Route path="registre-central/:id/transmissions" element={<GreffierRoute><JournalTransmissions /></GreffierRoute>} />
+
+        {/* Relevé mensuel officiel Guichet unique — Greffier uniquement */}
+        <Route path="releve-gu" element={<GreffierRoute><ListeRelevesGU /></GreffierRoute>} />
 
         {/* Administration */}
         <Route path="administration/utilisateurs" element={<Utilisateurs />} />

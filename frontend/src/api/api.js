@@ -941,4 +941,14 @@ export const registreCentralAPI = {
   journal:        (params)=> apiV1.get('/interop/journal/', { params }),
 };
 
+// ── Relevé mensuel officiel du Guichet unique ────────────────────────────────
+// Endpoints : /api/releve-gu/* (réservé greffier)
+export const releveGuAPI = {
+  list:      (params)        => api.get('/releve-gu/', { params }),
+  generer:   (data)          => api.post('/releve-gu/generer/', data),
+  get:       (id)            => api.get(`/releve-gu/${id}/`),
+  finaliser: (id)            => api.post(`/releve-gu/${id}/finaliser/`),
+  pdfUrl:    (id, lang='fr') => `${BASE_URL}/releve-gu/${id}/pdf/?lang=${lang}`,
+};
+
 export default api;

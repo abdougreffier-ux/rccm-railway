@@ -76,4 +76,7 @@ urlpatterns = [
     path('api/v1/interop/',  include((interop_urlpatterns,  'interop'))),
     path('api/v1/rc/',       include((rc_externe_urlpatterns, 'rc-externe'))),
     path('api/v1/releve/',   include('apps.registre_central.urls')),
+
+    # ── Relevé mensuel officiel Guichet unique ───────────────────────────────
+    path('api/releve-gu/',   include('apps.releve_gu.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

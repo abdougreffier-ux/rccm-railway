@@ -56,6 +56,8 @@ INSTALLED_APPS = [
     # ── Interopérabilité & Registre Central (API inter-administrations) ──────
     'apps.interop',
     'apps.registre_central',
+    # ── Relevé mensuel officiel du Guichet unique ────────────────────────────
+    'apps.releve_gu',
 ]
 
 MIDDLEWARE = [
