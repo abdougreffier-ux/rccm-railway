@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status as http_status
 from django.http import FileResponse
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Document
+from .models import Document, generate_nom_rccm
 from apps.core.permissions import EstGreffier, EstAgentOuGreffier, est_greffier
 
 # Statuts d'une ImmatriculationHistorique où un agent ne peut plus modifier
@@ -95,12 +95,42 @@ class DocumentListCreate(generics.ListCreateAPIView):
                     f"Ajout de pièces jointes interdit pour le statut « {chrono.statut} »."
                 )
 
-        f = self.request.FILES.get('fichier')
+        f    = self.request.FILES.get('fichier')
+        data = serializer.validated_data
         kwargs = {'created_by': self.request.user}
         if f:
-            kwargs['nom_fichier'] = f.name
-            kwargs['taille_ko']   = max(f.size // 1024, 1)   # minimum 1 Ko affiché
-            kwargs['mime_type']   = f.content_type
+            kwargs['taille_ko'] = max(f.size // 1024, 1)   # minimum 1 Ko affiché
+            kwargs['mime_type'] = f.content_type
+
+        # ── Nommage normalisé RCCM ────────────────────────────────────────────
+        # SEQ = nombre de PJ déjà liées au même (parent FK + type_doc) + 1
+        _FK_NAMES = ('chrono', 'ra', 'modification', 'cession', 'cession_fonds',
+                     'radiation', 'depot', 'demande', 'rbe', 'immatriculation_hist')
+        type_doc_obj = data.get('type_doc')
+        seq = 1
+        for fk in _FK_NAMES:
+            parent = data.get(fk)
+            if parent:
+                qs = Document.objects.filter(**{fk: parent})
+                if type_doc_obj:
+                    qs = qs.filter(type_doc=type_doc_obj)
+                seq = qs.count() + 1
+                break
+
+        kwargs['nom_fichier'] = generate_nom_rccm(
+            type_doc=type_doc_obj,
+            chrono=data.get('chrono'),
+            ra=data.get('ra'),
+            modification=data.get('modification'),
+            cession=data.get('cession'),
+            cession_fonds=data.get('cession_fonds'),
+            radiation=data.get('radiation'),
+            depot=data.get('depot'),
+            demande=data.get('demande'),
+            rbe=data.get('rbe'),
+            immatriculation_hist=data.get('immatriculation_hist'),
+            seq=seq,
+        )
         serializer.save(**kwargs)
 
 

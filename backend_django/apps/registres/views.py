@@ -361,6 +361,12 @@ class ValiderRAView(APIView):
         ra.date_immatriculation = ra.date_immatriculation or timezone.now().date()
         ra.save(update_fields=['numero_ra', 'statut', 'validated_at', 'validated_by', 'date_immatriculation'])
 
+        # ── Renommage RCCM des pièces jointes (RA_TMP → numéro réel) ─────────
+        # Une fois numero_ra attribué, toutes les PJ liées à ce RA dont le nom
+        # contient encore RA_TMP reçoivent leur nom définitif normalisé.
+        from apps.documents.models import renommer_docs_ra_valide
+        renommer_docs_ra_valide(ra)
+
         # Valider aussi le RC chrono lié — quel que soit son statut courant.
         # Cas couverts :
         #   • EN_INSTANCE  : agent a envoyé le RC via EnvoyerRChronoView (flux standard)
