@@ -18,12 +18,11 @@
 import React, { useState } from 'react';
 import {
   Card, Table, Tag, Button, Space, Typography, Modal, Form,
-  InputNumber, Select, Tooltip, Alert, Statistic, Row, Col,
-  Dropdown, message,
+  InputNumber, Select, Tooltip, Alert, Statistic, Row, Col, message,
 } from 'antd';
 import {
   PlusOutlined, LockOutlined, FilePdfOutlined,
-  ReloadOutlined, InfoCircleOutlined, DownOutlined,
+  ReloadOutlined, InfoCircleOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { releveGuAPI, openPDF } from '../../api/api';
@@ -42,8 +41,7 @@ const MOIS_AR = [
 ];
 
 const STATUT_COLOR = { BROUILLON: 'default', FINALISE: 'green' };
-const STATUT_LABEL_FR = { BROUILLON: 'Brouillon', FINALISE: 'Finalisé' };
-const STATUT_LABEL_AR = { BROUILLON: 'مسودة',      FINALISE: 'محدد' };
+const STATUT_LABEL = { BROUILLON: 'Brouillon', FINALISE: 'Finalisé' };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -69,7 +67,9 @@ const ListeRelevesGU = () => {
       setModalOpen(false);
       form.resetFields();
     },
-    onError: (e) => message.error(e.response?.data?.detail || (isAr ? 'خطأ أثناء التوليد.' : 'Erreur lors de la génération.')),
+    onError: (e) => message.error(
+      e.response?.data?.detail || (isAr ? 'خطأ أثناء التوليد.' : 'Erreur lors de la génération.')
+    ),
   });
 
   const finaliserMut = useMutation({
@@ -79,13 +79,10 @@ const ListeRelevesGU = () => {
       qc.invalidateQueries({ queryKey: ['releve-gu-list'] });
       setConfirmObj(null);
     },
-    onError: (e) => message.error(e.response?.data?.detail || (isAr ? 'خطأ أثناء التحديد.' : 'Erreur lors de la finalisation.')),
+    onError: (e) => message.error(
+      e.response?.data?.detail || (isAr ? 'خطأ أثناء التحديد.' : 'Erreur lors de la finalisation.')
+    ),
   });
-
-  // ── Téléchargement PDF ────────────────────────────────────────────────────────
-  const handlePdf = (id, lang) => {
-    openPDF(releveGuAPI.pdfUrl(id, lang));
-  };
 
   // ── Colonnes ──────────────────────────────────────────────────────────────────
   const colonnes = [
@@ -129,7 +126,7 @@ const ListeRelevesGU = () => {
       align: 'center',
       render: (v) => (
         <Tag color={STATUT_COLOR[v] || 'default'}>
-          {isAr ? (STATUT_LABEL_AR[v] || v) : (STATUT_LABEL_FR[v] || v)}
+          {STATUT_LABEL[v] || v}
         </Tag>
       ),
     },
@@ -151,29 +148,42 @@ const ListeRelevesGU = () => {
       title: isAr ? 'الإجراءات' : 'Actions',
       key: 'actions',
       fixed: 'right',
-      width: 220,
+      width: 240,
       render: (_, r) => (
         <Space wrap size={4}>
 
-          {/* PDF bilingue */}
-          <Dropdown
-            menu={{
-              items: [
-                { key: 'fr', label: '🇫🇷 Français', onClick: () => handlePdf(r.id, 'fr') },
-                { key: 'ar', label: '🇲🇷 عربي',     onClick: () => handlePdf(r.id, 'ar') },
-              ],
-            }}
-          >
-            <Button size="small" icon={<FilePdfOutlined />} style={{ color: '#C9A227', borderColor: '#C9A227' }}>
-              PDF <DownOutlined />
+          {/* PDF Français */}
+          <Tooltip title="PDF Français">
+            <Button
+              size="small"
+              icon={<FilePdfOutlined />}
+              style={{ color: '#C9A227', borderColor: '#C9A227' }}
+              onClick={() => openPDF(releveGuAPI.pdfUrl(r.id, 'fr'))}
+            >
+              FR
             </Button>
-          </Dropdown>
+          </Tooltip>
+
+          {/* PDF عربي */}
+          <Tooltip title="PDF عربي">
+            <Button
+              size="small"
+              icon={<FilePdfOutlined />}
+              style={{ color: '#0B6E3A', borderColor: '#0B6E3A' }}
+              onClick={() => openPDF(releveGuAPI.pdfUrl(r.id, 'ar'))}
+            >
+              AR
+            </Button>
+          </Tooltip>
 
           {/* Finaliser — seulement si BROUILLON */}
           {r.statut === 'BROUILLON' && (
-            <Tooltip title={isAr ? 'تجميد نهائي للكشف (لا رجعة فيه)' : 'Geler définitivement (irréversible)'}>
+            <Tooltip title={isAr ? 'تجميد نهائي (لا رجعة فيه)' : 'Geler définitivement (irréversible)'}>
               <Button
-                size="small" icon={<LockOutlined />} type="primary" ghost
+                size="small"
+                icon={<LockOutlined />}
+                type="primary"
+                ghost
                 onClick={() => setConfirmObj({ releve: r })}
               >
                 {isAr ? 'إتمام' : 'Finaliser'}
@@ -200,10 +210,13 @@ const ListeRelevesGU = () => {
     <div style={{ padding: '0 4px' }}>
 
       {/* En-tête */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8,
+      }}>
         <div>
           <Title level={4} style={{ margin: 0, color: '#0B6E3A' }}>
-            🏢 {isAr ? 'كشوف شهرية للشباك الموحد' : 'Relevés mensuels — Guichet unique'}
+            {isAr ? 'كشوف شهرية للشباك الموحد' : '🏢 Relevés mensuels — Guichet unique'}
           </Title>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {isAr
@@ -212,11 +225,12 @@ const ListeRelevesGU = () => {
           </Text>
         </div>
         <Space>
-          <Button icon={<ReloadOutlined />} onClick={refetch}>
+          <Button icon={<ReloadOutlined />} onClick={() => refetch()}>
             {isAr ? 'تحديث' : 'Actualiser'}
           </Button>
           <Button
-            type="primary" icon={<PlusOutlined />}
+            type="primary"
+            icon={<PlusOutlined />}
             style={{ background: '#0B6E3A', borderColor: '#0B6E3A' }}
             onClick={() => setModalOpen(true)}
           >
@@ -228,10 +242,10 @@ const ListeRelevesGU = () => {
       {/* Statistiques globales cumulées */}
       <Row gutter={12} style={{ marginBottom: 16 }}>
         {[
-          { label: isAr ? 'ش.ط (PH)' : 'Pers. physiques',  value: totaux.ph,    color: '#52c41a' },
-          { label: isAr ? 'ش.م (PM)' : 'Pers. morales',    value: totaux.pm,    color: '#1677ff' },
-          { label: isAr ? 'فروع (SC)' : 'Succursales',     value: totaux.sc,    color: '#fa8c16' },
-          { label: isAr ? 'المجموع'   : 'Total GU',        value: totaux.total, color: '#0B6E3A' },
+          { label: isAr ? 'ش.ط PH' : 'Pers. physiques', value: totaux.ph,    color: '#52c41a' },
+          { label: isAr ? 'ش.م PM' : 'Pers. morales',   value: totaux.pm,    color: '#1677ff' },
+          { label: isAr ? 'فروع SC' : 'Succursales',    value: totaux.sc,    color: '#fa8c16' },
+          { label: isAr ? 'المجموع' : 'Total GU',       value: totaux.total, color: '#0B6E3A' },
         ].map(({ label, value, color }) => (
           <Col xs={12} sm={6} key={label}>
             <Card size="small" style={{ borderTop: `3px solid ${color}` }}>
@@ -286,7 +300,9 @@ const ListeRelevesGU = () => {
         width={400}
       >
         <Alert
-          type="warning" showIcon style={{ marginBottom: 16, fontSize: 12 }}
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16, fontSize: 12 }}
           message={
             isAr
               ? 'يشمل الكشف حصرياً التسجيلات المصادق عليها عبر الشباك الموحد (AGENT_GU) خلال الشهر المحدد.'
@@ -327,26 +343,29 @@ const ListeRelevesGU = () => {
         open={!!confirmObj}
         title={<><LockOutlined style={{ color: '#0B6E3A' }} /> {isAr ? 'تجميد الكشف نهائياً' : 'Finaliser le relevé'}</>}
         onCancel={() => setConfirmObj(null)}
-        onOk={() => finaliserMut.mutate(confirmObj.releve.id)}
+        onOk={() => confirmObj && finaliserMut.mutate(confirmObj.releve.id)}
         confirmLoading={finaliserMut.isPending}
         okText={isAr ? 'تأكيد التجميد' : 'Confirmer la finalisation'}
         okButtonProps={{ style: { background: '#0B6E3A', borderColor: '#0B6E3A' } }}
         cancelText={isAr ? 'إلغاء' : 'Annuler'}
       >
         <Alert
-          type="warning" showIcon style={{ marginBottom: 12, fontSize: 12 }}
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12, fontSize: 12 }}
           message={
             isAr
               ? 'بعد التجميد، تصبح بيانات الكشف محددة قانونياً ولا يمكن تعديلها. هذه العملية لا رجعة فيها.'
               : 'Après finalisation, les données du relevé sont juridiquement figées et non modifiables. Opération irréversible.'
           }
         />
-        {confirmObj?.releve && (
+        {confirmObj && confirmObj.releve && (
           <p style={{ marginBottom: 0 }}>
             <b>{isAr ? 'الفترة :' : 'Période :'}</b>{' '}
             {isAr ? MOIS_AR[confirmObj.releve.mois] : MOIS_FR[confirmObj.releve.mois]}{' '}
             {confirmObj.releve.annee}
-            {' — '}<b>{confirmObj.releve.nb_total}</b>{' '}
+            {' — '}
+            <b>{confirmObj.releve.nb_total}</b>{' '}
             {isAr ? 'تسجيل' : 'immatriculation(s)'}
             {' (PH: '}{confirmObj.releve.nb_ph}
             {', PM: '}{confirmObj.releve.nb_pm}
